@@ -1,0 +1,4 @@
+- insert:
+    - id: whale-pet
+      name: '@local/whale-pet'
+      config: {}
