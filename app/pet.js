@@ -60,32 +60,37 @@ window.setInterval(() => {
   say(pick(dict.idle));
 }, 18000);
 
-// Drag by absolute window positioning: read the window position once at
-// drag start, then move to dragStart + (pointer offset since press).
-// Incremental deltas fight the window's own movement and jitter.
+// The renderer only reports drag start and end; the main process tracks
+// the real OS cursor, so window-relative coordinates never fight it.
 const DRAG_THRESHOLD = 4;
-let drag = null;
+let press = null;
+let dragging = false;
 
-pet.addEventListener('pointerdown', async (event) => {
+pet.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   event.preventDefault();
   pet.setPointerCapture(event.pointerId);
-  const [winX, winY] = await window.whalePet.getPos();
-  drag = { moved: false, startClientX: event.clientX, startClientY: event.clientY, winX, winY };
+  press = { x: event.clientX, y: event.clientY };
 });
 pet.addEventListener('pointermove', (event) => {
-  if (drag === null) return;
-  const offsetX = event.clientX - drag.startClientX;
-  const offsetY = event.clientY - drag.startClientY;
-  if (!drag.moved && Math.hypot(offsetX, offsetY) < DRAG_THRESHOLD) return;
-  if (!drag.moved) { drag.moved = true; pet.classList.add('dragging'); say(dict.drag); }
-  window.whalePet.moveTo(drag.winX + offsetX, drag.winY + offsetY);
+  if (press === null || dragging) return;
+  const dx = event.clientX - press.x;
+  const dy = event.clientY - press.y;
+  if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+  dragging = true;
+  press = null;
+  pet.classList.add('dragging');
+  say(dict.drag);
+  window.whalePet.beginDrag();
 });
-pet.addEventListener('pointerup', () => {
-  const wasDrag = drag !== null && drag.moved;
-  drag = null;
-  pet.classList.remove('dragging');
-  if (wasDrag) return;
+pet.addEventListener('pointerup', async () => {
+  if (dragging) {
+    dragging = false;
+    pet.classList.remove('dragging');
+    await window.whalePet.endDrag();
+    return;
+  }
+  press = null;
   pet.classList.add('happy');
   say(pick(dict.pat));
   window.setTimeout(() => pet.classList.remove('happy'), 1600);

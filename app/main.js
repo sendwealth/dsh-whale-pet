@@ -37,6 +37,11 @@ function createWindow() {
   // Keep her inside the visible desktop after display changes.
   win.on('moved', clampToWorkArea);
   screen.on('display-metrics-changed', clampToWorkArea);
+  win.on('closed', () => {
+    if (dragState !== null && dragState.timer !== null) clearTimeout(dragState.timer);
+    dragState = null;
+    win = null;
+  });
 }
 
 function clampToWorkArea() {
@@ -69,18 +74,30 @@ app.whenReady().then(() => {
   app.on('window-all-closed', () => { /* keep running in the tray */ });
 });
 
-// The renderer drives window dragging by absolute position: it reads the
-// window position once at drag start, then moves to dragStart + pointer
-// offset. Incremental deltas oscillate because moving the window shifts
-// the pointer's client coordinates under pointer capture.
-ipcMain.handle('whale:get-pos', () => {
-  if (win === null || win.isDestroyed()) return [0, 0];
-  return win.getPosition();
+// Dragging runs in the main process: renderer-side coordinates are
+// window-relative, so every window move distorts them and the window
+// chases its own error. The main process instead polls the real OS
+// cursor position and keeps the grab offset constant.
+let dragState = null;
+
+ipcMain.handle('whale:begin-drag', () => {
+  if (win === null || win.isDestroyed() || dragState !== null) return;
+  const cursor = screen.getCursorScreenPoint();
+  const [x, y] = win.getPosition();
+  dragState = { offX: cursor.x - x, offY: cursor.y - y, timer: null };
+  const step = () => {
+    if (dragState === null || win === null || win.isDestroyed()) return;
+    const point = screen.getCursorScreenPoint();
+    win.setPosition(point.x - dragState.offX, point.y - dragState.offY);
+    dragState.timer = setTimeout(step, 16);
+  };
+  step();
 });
 
-ipcMain.handle('whale:move-to', (_event, x, y) => {
-  if (win === null || win.isDestroyed()) return;
-  win.setPosition(Math.round(x), Math.round(y));
+ipcMain.handle('whale:end-drag', () => {
+  if (dragState === null) return;
+  if (dragState.timer !== null) clearTimeout(dragState.timer);
+  dragState = null;
 });
 
 ipcMain.handle('whale:hide', () => {
