@@ -34,4 +34,21 @@ contextBridge.exposeInMainWorld('whalePet', {
     ipcRenderer.on('whale:fullscreen', handler);
     return () => { ipcRenderer.removeListener('whale:fullscreen', handler); };
   },
+  // ---- L3 chat ----
+  // One conversation round. The API key stays in the main process; only
+  // { ok, reply } or { ok: false, code, message } comes back.
+  chat: (text, lang) => ipcRenderer.invoke('whale:chat', { text, lang }),
+  hasApiKey: () => ipcRenderer.invoke('whale:has-api-key'),
+  setApiKey: (key) => ipcRenderer.invoke('whale:set-api-key', key),
+  onKeyConfigured: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('whale:key-configured', handler);
+    return () => { ipcRenderer.removeListener('whale:key-configured', handler); };
+  },
+  // Tray "Chat" entry asks the renderer to open the input line.
+  onOpenChat: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('whale:open-chat', handler);
+    return () => { ipcRenderer.removeListener('whale:open-chat', handler); };
+  },
 });

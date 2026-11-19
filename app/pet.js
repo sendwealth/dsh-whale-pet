@@ -130,6 +130,22 @@ const DICTS = {
   },
 };
 const dict = (navigator.language ?? 'en').startsWith('zh') ? DICTS.zh : DICTS.en;
+const dictLang = dict === DICTS.zh ? 'zh' : 'en';
+
+// L3 fallbacks: local lines when the API is unreachable or chat is off.
+const CHAT_DICTS = {
+  zh: {
+    fail: ['（呜……脑子里进海水了，连不上了……）', '（噗噜……联系不上深海的海流，等一下再聊嘛）'],
+    off: '（现在不想用脑子聊天啦，摸摸我就好～）',
+    noKey: '（还没有配置 API Key 哦，托盘里可以设置～）',
+  },
+  en: {
+    fail: ['(Blub… seawater got into my head, I cannot connect…)', '(Cannot reach the deep-sea current… let us chat later?)'],
+    off: '(I am off-duty for chatting now—pat me instead~)',
+    noKey: '(No API key configured yet—set one from the tray menu~)',
+  },
+};
+const chatDict = CHAT_DICTS[dictLang];
 
 function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
 
@@ -160,11 +176,17 @@ function pickCtx(list) {
 }
 
 let bubbleTimer = 0;
-function say(text) {
+/**
+ * Show a bubble for `ms` (default 5.2 s; chat replies stay 10 s).
+ * @param {string} text
+ * @param {number} [ms]
+ */
+function say(text, ms = 5200) {
   bubbleText.textContent = text;
+  bubbleText.classList.remove('typing');
   bubble.hidden = false;
   window.clearTimeout(bubbleTimer);
-  bubbleTimer = window.setTimeout(() => { bubble.hidden = true; }, 5200);
+  bubbleTimer = window.setTimeout(() => { bubble.hidden = true; }, ms);
 }
 
 // ---- State machine wiring -------------------------------------------------
@@ -242,7 +264,7 @@ function zoneFor(y) {
 
 const SETTINGS_KEY = 'whale-pet-settings';
 const TALK_INTERVALS = { talkative: 9000, normal: 18000, quiet: 45000 };
-const settings = { muted: false, talkativeness: 'normal', sensors: true };
+const settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true };
 try { Object.assign(settings, JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (err) { /* fall back to defaults on corrupt storage */ }
 if (!(settings.talkativeness in TALK_INTERVALS)) settings.talkativeness = 'normal';
 
@@ -270,6 +292,10 @@ window.whalePet.onSettingsChanged((remote) => {
 // and stays quiet until it goes away.
 let fullscreenHidden = false;
 
+// True while a chat input is open or a reply is pending/typing; idle
+// chatter waits it out.
+let chatting = false;
+
 let idleTimer = 0;
 function scheduleIdleChatter() {
   window.clearTimeout(idleTimer);
@@ -277,7 +303,7 @@ function scheduleIdleChatter() {
   idleTimer = window.setTimeout(idleChatter, TALK_INTERVALS[settings.talkativeness]);
 }
 function idleChatter() {
-  if (fullscreenHidden || !bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
+  if (fullscreenHidden || chatting || !bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
     scheduleIdleChatter();
     return;
   }
@@ -404,3 +430,115 @@ Sensors.on('fullscreen-changed', (fullscreen) => {
 });
 
 if (settings.sensors !== false) Sensors.setEnabled(true);
+
+// ---- L3 chat: talk to her for real -----------------------------------------
+
+const chatInput = document.getElementById('chat-input');
+const chatText = document.getElementById('chat-text');
+const chatSend = document.getElementById('chat-send');
+const dots = document.getElementById('dots');
+
+let typewriterTimer = 0;
+let chatSeq = 0; // increments per send; stale replies are dropped
+
+function stopTypewriter() {
+  window.clearInterval(typewriterTimer);
+  typewriterTimer = 0;
+}
+
+function showThinking() {
+  stopTypewriter();
+  bubbleText.textContent = '';
+  bubbleText.classList.remove('typing');
+  dots.hidden = false;
+  bubble.hidden = false;
+  window.clearTimeout(bubbleTimer);
+}
+
+function endConversationBubble(ms) {
+  chatting = false;
+  dots.hidden = true;
+  window.clearTimeout(bubbleTimer);
+  bubbleTimer = window.setTimeout(() => { bubble.hidden = true; scheduleIdleChatter(); }, ms);
+}
+
+function showChatReply(text) {
+  dots.hidden = true;
+  bubbleText.textContent = '';
+  bubbleText.classList.add('typing');
+  bubble.hidden = false;
+  let i = 0;
+  typewriterTimer = window.setInterval(() => {
+    i += 1;
+    bubbleText.textContent = text.slice(0, i);
+    if (i >= text.length) {
+      bubbleText.classList.remove('typing');
+      stopTypewriter();
+      // The full reply stays readable for a while after the typing ends.
+      endConversationBubble(10000);
+    }
+  }, 35);
+}
+
+function closeChatInput() {
+  chatInput.hidden = true;
+  if (chatting && dots.hidden && typewriterTimer === 0) chatting = false;
+}
+
+function openChatInput() {
+  if (fullscreenHidden || machine.current === 'sleep') return;
+  if (settings.chat === false) {
+    machine.request('talk', { force: true });
+    say(chatDict.off);
+    return;
+  }
+  chatting = true;
+  chatInput.hidden = false;
+  chatText.value = '';
+  chatText.focus();
+}
+
+async function sendChat() {
+  const text = chatText.value.trim();
+  if (text === '' || !chatting) return;
+  chatInput.hidden = true;
+  chatText.value = '';
+  lastInteract = Date.now();
+  machine.request('talk', { force: true });
+  showThinking();
+  const seq = ++chatSeq;
+  const result = await window.whalePet.chat(text, dictLang);
+  if (seq !== chatSeq) return; // a newer send superseded this round
+  if (result && result.ok) {
+    showChatReply(result.reply.slice(0, 600));
+  } else {
+    const line = result && result.code === 'no-key' ? chatDict.noKey : pick(chatDict.fail);
+    say(line, 10000);
+    chatting = false;
+    scheduleIdleChatter();
+  }
+}
+
+chatSend.addEventListener('click', sendChat);
+chatText.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') { event.preventDefault(); sendChat(); }
+  else if (event.key === 'Escape') { event.preventDefault(); closeChatInput(); }
+});
+
+// Ctrl+Shift+K opens the chat input from anywhere over the pet.
+window.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && event.shiftKey && (event.key === 'K' || event.key === 'k')) {
+    event.preventDefault();
+    if (chatInput.hidden) openChatInput();
+    else chatText.focus();
+  }
+});
+
+// Tray menu: "和她说话 / Chat".
+window.whalePet.onOpenChat(() => { openChatInput(); });
+// After a key is configured, tell her she can think again.
+window.whalePet.onKeyConfigured(() => {
+  if (!chatInput.hidden) return;
+  machine.request('talk', { force: true });
+  say(dictLang === 'zh' ? '（海流接通了！现在可以好好聊天啦～）' : '(The current is connected! Now we can really chat~)', 6000);
+});

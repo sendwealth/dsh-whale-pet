@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'">
+  <title>配置 DeepSeek API Key</title>
+  <style>
+    body { font: 13px/1.6 system-ui, sans-serif; margin: 16px; color: #1c2733; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; margin: 6px 0 12px;
+      border: 1px solid #b9c4d0; border-radius: 6px; font: inherit; }
+    button { padding: 6px 18px; border: none; border-radius: 6px; background: #4f6ef7;
+      color: #fff; font: inherit; cursor: pointer; }
+    .hint { color: #5a6b7d; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <label for="key">DeepSeek API Key（只在主进程保存，不会进入页面存储）</label>
+  <input id="key" type="password" placeholder="sk-..." autocomplete="off">
+  <button id="save">保存 / Save</button>
+  <p class="hint">保存到 Electron userData 目录的 config.json。也可改用环境变量 DEEPSEEK_API_KEY。</p>
+  <script src="key-dialog.js"></script>
+</body>
+</html>

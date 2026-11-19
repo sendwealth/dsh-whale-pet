@@ -37,6 +37,22 @@ L1 生命感：显式状态机（idle/sleep/happy/angry/curious/shy/talk，见 `
 
 L1 liveliness: an explicit state machine (idle/sleep/happy/angry/curious/shy/talk, see `app/pet-states.js`); she sleeps 23:00–07:00 (desaturated figure + pure-CSS Zzz; clicking wakes her briefly, then she dozes off again) and greets you on the first morning interaction. Touch zones split by click position — head pats (happy), face (shy), belly pokes (angry) — each with its own bilingual line pools, and idle lines are filtered by context tags (time slot, long-idle, weekday/weekend). Tray submenus toggle chatter mute and talkativeness (talkative/normal/quiet), persisted in localStorage and synced both ways over IPC.
 
+L3 真对话（`app/chat-main.js`、`app/memory.js`）：接入 DeepSeek API，她真的能陪聊了。
+
+- **入口**：托盘菜单“和她说话 / Chat”、或快捷键 Ctrl+Shift+K，在气泡下方弹出输入行（Enter 发送、Esc 关闭）；单击摸头等交互不变。
+- **人设**：主进程注入鲸鱼娘 system prompt（温柔、元气、小傲娇，回复 ≤2 句，禁 markdown、禁自称 AI 助手），model `deepseek-chat`，max_tokens 100（硬上限 150），temperature 0.8。
+- **API key 安全**：key 只存在于主进程——优先读 Electron `userData/config.json`（托盘“设置 → 配置 API Key…”小窗写入），其次 `DEEPSEEK_API_KEY` 环境变量；base URL 默认 `https://api.deepseek.com`（可用 `DEEPSEEK_BASE_URL` 覆盖）。key 永不进入 renderer 或 localStorage，错误信息不含 key。
+- **记忆**（`userData/memory.json`）：最近 40 轮对话滚动保存，请求时注入 system prompt + 最近 8 轮；用户名、在做项目、作息、喜好等事实由轻量正则抽取（不调 LLM），以“你知道的关于主人的事”拼进 prompt；写盘 debounce 1.5 s。
+- **体验**：发送后进入 talk 状态、气泡三点跳动“思考”，回复打字机式逐字显示，气泡保留 10 s，对话期间暂停闲聊 timer；API 失败或无 key 时回退本地卖萌台词（中英），托盘菜单提供“配置 API Key…”入口。托盘“对话 / Chat”开关（默认开）关闭后输入框不可用、回退 L1 台词。
+
+L3 real conversation (`app/chat-main.js`, `app/memory.js`): she is wired to the DeepSeek API and can actually chat.
+
+- **Entry points**: tray menu "和她说话 / Chat" or the Ctrl+Shift+K hotkey opens a one-line input under the bubble (Enter sends, Esc closes); single-click head pats and the other touch interactions are unchanged.
+- **Persona**: the main process injects a whale-girl system prompt (gentle, energetic, slightly tsundere; replies ≤2 sentences; no markdown; never claims to be an AI assistant), model `deepseek-chat`, max_tokens 100 (hard cap 150), temperature 0.8.
+- **API key safety**: the key lives only in the main process — read first from Electron `userData/config.json` (written by the tiny "Configure API Key…" dialog in the tray Settings menu), then from the `DEEPSEEK_API_KEY` environment variable; base URL defaults to `https://api.deepseek.com` (override with `DEEPSEEK_BASE_URL`). It never reaches the renderer or localStorage, and error messages never contain it.
+- **Memory** (`userData/memory.json`): a rolling window of the last 40 turns; each request injects the system prompt plus the 8 most recent turns. Facts (your name, current project, sleep schedule, likes) are extracted by lightweight regex rules — no LLM extraction — and appended to the prompt as "things you know about your master"; writes are debounced by 1.5 s.
+- **Experience**: sending enters the talk state with a bouncing three-dot "thinking" bubble, the reply types itself out and lingers 10 s, and idle chatter pauses during a conversation. On API failure or a missing key she falls back to local lines (zh/en) and the tray offers "Configure API Key…". The tray "对话 / Chat" checkbox (default on) disables the input and falls back to L1 lines when off.
+
 
 
 需要已登录 DSH Web 且本机装有 `gh`/`git`。克隆本仓库后，在 DSH 会话里让 Agent 执行：

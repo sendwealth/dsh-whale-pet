@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerMonitor } = require('electron');
 const os = require('os');
 const path = require('path');
+const { registerChat } = require('./chat-main');
 
 /** Whether the current display server accepts transparent windows. */
 let win = null;
@@ -61,8 +62,11 @@ function clampToWorkArea() {
   if (nx !== x || ny !== y) win.setPosition(nx, ny);
 }
 
+let chatApi = null;
+
 app.whenReady().then(() => {
   createWindow();
+  chatApi = registerChat({ app, getWindow: () => win });
 
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'whale-girl-small.png')).resize({ width: 32, height: 32 }));
   tray.setToolTip('鲸鱼娘桌宠 / Whale pet');
@@ -80,7 +84,7 @@ app.whenReady().then(() => {
 
 // The renderer owns the settings (persisted in localStorage) and pushes them
 // here; the tray menu mirrors them and its clicks push changes back.
-let settings = { muted: false, talkativeness: 'normal', sensors: true };
+let settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true };
 
 function rebuildTrayMenu() {
   if (tray === null) return;
@@ -108,8 +112,16 @@ function rebuildTrayMenu() {
           checked: settings.sensors,
           click: () => { applySetting('sensors', !settings.sensors); },
         },
+        {
+          label: '对话 / Chat',
+          type: 'checkbox',
+          checked: settings.chat,
+          click: () => { applySetting('chat', !settings.chat); },
+        },
+        { label: '配置 API Key… / Configure API Key…', click: () => { chatApi?.openKeyDialog(); } },
       ],
     },
+    { label: '和她说话 / Chat', click: () => { if (windowUsable()) win.webContents.send('whale:open-chat'); } },
     { label: '显示 / Show', click: () => { win?.show(); } },
     { type: 'separator' },
     { label: '退出 / Quit', click: () => { quitRequested = true; app.quit(); } },
@@ -127,7 +139,7 @@ function applySetting(key, value) {
 ipcMain.handle('whale:get-settings', () => settings);
 
 ipcMain.handle('whale:set-setting', (_event, key, value) => {
-  if (key !== 'muted' && key !== 'talkativeness' && key !== 'sensors') return;
+  if (key !== 'muted' && key !== 'talkativeness' && key !== 'sensors' && key !== 'chat') return;
   applySetting(key, value);
 });
 
