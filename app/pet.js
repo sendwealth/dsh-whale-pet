@@ -60,28 +60,26 @@ window.setInterval(() => {
   say(pick(dict.idle));
 }, 18000);
 
-// Drag by reporting pointer deltas to the main process; a short press
-// below the threshold stays a pat instead of moving the window.
+// Drag by absolute window positioning: read the window position once at
+// drag start, then move to dragStart + (pointer offset since press).
+// Incremental deltas fight the window's own movement and jitter.
 const DRAG_THRESHOLD = 4;
 let drag = null;
 
-pet.addEventListener('pointerdown', (event) => {
+pet.addEventListener('pointerdown', async (event) => {
   if (event.button !== 0) return;
   event.preventDefault();
   pet.setPointerCapture(event.pointerId);
-  drag = { moved: false, startClientX: event.clientX, startClientY: event.clientY };
+  const [winX, winY] = await window.whalePet.getPos();
+  drag = { moved: false, startClientX: event.clientX, startClientY: event.clientY, winX, winY };
 });
 pet.addEventListener('pointermove', (event) => {
   if (drag === null) return;
-  const dx = event.clientX - drag.startClientX;
-  const dy = event.clientY - drag.startClientY;
-  if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+  const offsetX = event.clientX - drag.startClientX;
+  const offsetY = event.clientY - drag.startClientY;
+  if (!drag.moved && Math.hypot(offsetX, offsetY) < DRAG_THRESHOLD) return;
   if (!drag.moved) { drag.moved = true; pet.classList.add('dragging'); say(dict.drag); }
-  const stepX = event.clientX - (drag.lastX ?? drag.startClientX);
-  const stepY = event.clientY - (drag.lastY ?? drag.startClientY);
-  drag.lastX = event.clientX;
-  drag.lastY = event.clientY;
-  window.whalePet.moveBy(stepX, stepY);
+  window.whalePet.moveTo(drag.winX + offsetX, drag.winY + offsetY);
 });
 pet.addEventListener('pointerup', () => {
   const wasDrag = drag !== null && drag.moved;

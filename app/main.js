@@ -69,11 +69,18 @@ app.whenReady().then(() => {
   app.on('window-all-closed', () => { /* keep running in the tray */ });
 });
 
-// The renderer drives window dragging: it reports deltas from pointer events.
-ipcMain.handle('whale:move-by', (_event, dx, dy) => {
+// The renderer drives window dragging by absolute position: it reads the
+// window position once at drag start, then moves to dragStart + pointer
+// offset. Incremental deltas oscillate because moving the window shifts
+// the pointer's client coordinates under pointer capture.
+ipcMain.handle('whale:get-pos', () => {
+  if (win === null || win.isDestroyed()) return [0, 0];
+  return win.getPosition();
+});
+
+ipcMain.handle('whale:move-to', (_event, x, y) => {
   if (win === null || win.isDestroyed()) return;
-  const [x, y] = win.getPosition();
-  win.setPosition(x + Math.round(dx), y + Math.round(dy));
+  win.setPosition(Math.round(x), Math.round(y));
 });
 
 ipcMain.handle('whale:hide', () => {
