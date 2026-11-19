@@ -60,6 +60,10 @@ function createAgentConnection({ dshHome, cwd, sdkIndexUrl, env, emit }) {
   /** @type {import('/home/rowan/Projects/deepseek-harness/packages/sdk/client/lib/index.js').HarnessClient|null} */
   let client = null;
   let closing = false;
+  // Set by stop() while a start() is still connecting: every await
+  // resumption point in start() checks it so a cancelled start tears the
+  // client down instead of leaking an unowned runtime subprocess.
+  let cancelPending = false;
   let phase = 'offline';
   let taskInFlight = false;
   let lastTurnError = null; // {code, message} from turn/end, cleared on idle
@@ -144,20 +148,22 @@ function createAgentConnection({ dshHome, cwd, sdkIndexUrl, env, emit }) {
 
   async function start() {
     if (client !== null) return;
+    cancelPending = false;
     closing = false;
     setPhase('connecting');
     let mod;
     try {
       mod = await import(sdkIndexUrl);
     } catch (err) {
-      setPhase('error', { error: { code: 'SDK-LOAD', message: `Cannot load the DSH SDK client at ${sdkIndexUrl}` } });
+      if (!cancelPending) setPhase('error', { error: { code: 'SDK-LOAD', message: `Cannot load the DSH SDK client at ${sdkIndexUrl}` } });
       return;
     }
+    if (cancelPending) return; // stop() during the import already emitted offline
     try {
       fs.mkdirSync(dshHome, { recursive: true });
       fs.mkdirSync(cwd, { recursive: true });
     } catch (err) {
-      setPhase('error', { error: { code: 'FS', message: String(err?.message ?? err) } });
+      if (!cancelPending) setPhase('error', { error: { code: 'FS', message: String(err?.message ?? err) } });
       return;
     }
     const c = new mod.HarnessClient({
@@ -195,7 +201,16 @@ function createAgentConnection({ dshHome, cwd, sdkIndexUrl, env, emit }) {
       closing = true;
       try { await c.close(); } catch (closeErr) { /* best-effort teardown */ }
       closing = false;
-      setPhase('error', { error: { code: 'INIT', message: String(err?.message ?? err).slice(0, 300) } });
+      if (!cancelPending) setPhase('error', { error: { code: 'INIT', message: String(err?.message ?? err).slice(0, 300) } });
+      return;
+    }
+    if (cancelPending) {
+      // stop() landed while initialize was in flight: the runtime it
+      // spawned belongs to nobody — close it now, keep phase offline.
+      client = null;
+      closing = true;
+      try { await c.close(); } catch (closeErr) { /* best-effort teardown */ }
+      closing = false;
       return;
     }
     if (c.child) {
@@ -243,6 +258,9 @@ function createAgentConnection({ dshHome, cwd, sdkIndexUrl, env, emit }) {
   }
 
   async function stop() {
+    // Also cancels an in-flight start(): start()'s next await resumption
+    // tears the client down and never reaches `idle`.
+    cancelPending = true;
     if (client === null) { setPhase('offline'); return; }
     const c = client;
     client = null;

@@ -182,10 +182,14 @@ let approvalUp = false;
  * Show a bubble for `ms` (default 5.2 s; chat replies stay 10 s).
  * @param {string} text
  * @param {number} [ms]
+ * @param {boolean} [urgent] keep fully readable while asleep (agent lines)
  */
-function say(text, ms = 5200) {
+// `urgent` marks agent/approval-adjacent lines: they stay fully readable
+// even while she is asleep (the sleep fade exempts .bubble-text.urgent).
+function say(text, ms = 5200, urgent = false) {
   if (approvalUp) return;
   bubbleText.textContent = text;
+  bubbleText.classList.toggle('urgent', urgent);
   bubbleText.classList.remove('typing');
   bubble.hidden = false;
   window.clearTimeout(bubbleTimer);
@@ -286,6 +290,9 @@ window.whalePet.onSettingsChanged((remote) => {
   Object.assign(settings, remote);
   saveSettings();
   Sensors.setEnabled(settings.sensors !== false);
+  // Sensors off removes their data source: drop any pose they left behind
+  // (worried/doze/leaning) or it would stick until the next machine move.
+  if (settings.sensors === false) pet.classList.remove('doze', 'leaning', 'worried');
   updateModeTag();
   scheduleIdleChatter();
 });
@@ -372,8 +379,12 @@ pet.addEventListener('pointercancel', async () => {
   press = null;
 });
 
-// Double-click hides her; the tray icon brings her back.
+// Double-click hides her — but only from a rest state (idle/sleep), never
+// while an approval is pending or the agent is busy: hiding the window
+// then strands a blocked runtime and swallows the card.
 pet.addEventListener('dblclick', () => {
+  if (approvalUp || agentBusy()) return;
+  if (machine.current !== 'idle' && machine.current !== 'sleep') return;
   say(dict.double);
   window.setTimeout(() => { window.whalePet.hide(); }, 1200);
 });
@@ -453,7 +464,7 @@ function stopTypewriter() {
 function showThinking() {
   stopTypewriter();
   bubbleText.textContent = '';
-  bubbleText.classList.remove('typing');
+  bubbleText.classList.remove('typing', 'urgent');
   dots.hidden = false;
   bubble.hidden = false;
   window.clearTimeout(bubbleTimer);
@@ -469,6 +480,7 @@ function endConversationBubble(ms) {
 function showChatReply(text) {
   dots.hidden = true;
   bubbleText.textContent = '';
+  bubbleText.classList.remove('urgent');
   bubbleText.classList.add('typing');
   bubble.hidden = false;
   let i = 0;
@@ -490,7 +502,9 @@ function closeChatInput() {
 }
 
 function openChatInput() {
-  if (fullscreenHidden || machine.current === 'sleep') return;
+  // A pending approval card owns the input band; opening chat on top of it
+  // would also interleave a second agent round.
+  if (fullscreenHidden || machine.current === 'sleep' || approvalUp) return;
   // Agent mode reuses the input even when persona chat is off.
   if (settings.agent === false && settings.chat === false) {
     machine.request('talk', { force: true });
@@ -515,7 +529,11 @@ async function sendChat() {
   if (settings.agent) {
     const result = await window.whalePet.agentStartTask(text);
     if (result && result.ok) {
-      say(dictLang === 'zh' ? '收到任务！我去忙啦～' : 'Got it! On it~', 5000);
+      // The receipt ends the "conversation": from here the agent's phase
+      // changes narrate the story, and idle chatter may resume on idle.
+      say(dictLang === 'zh' ? '收到任务！我去忙啦～' : 'Got it! On it~', 5000, true);
+      chatting = false;
+      scheduleIdleChatter();
     } else {
       say(dictLang === 'zh' ? '（助手还没连上……托盘“设置 → 连接助手”里开启哦）' : '(The agent is not connected—enable it under tray Settings.)', 8000);
       chatting = false;
@@ -539,6 +557,8 @@ async function sendChat() {
 
 chatSend.addEventListener('click', sendChat);
 chatText.addEventListener('keydown', (event) => {
+  // IME: Enter that commits a composition must not send the raw pinyin.
+  if (event.isComposing) return;
   if (event.key === 'Enter') { event.preventDefault(); sendChat(); }
   else if (event.key === 'Escape') { event.preventDefault(); closeChatInput(); }
 });
@@ -616,6 +636,9 @@ function hideBubbleNow() {
   stopTypewriter();
   dots.hidden = true;
   bubble.hidden = true;
+  // An interrupted typewriter never reaches endConversationBubble, so this
+  // is the last chance to hand the conversation back to idle chatter.
+  if (chatting && dots.hidden && typewriterTimer === 0) chatting = false;
 }
 
 function showApprovalCard(summary) {
@@ -663,18 +686,28 @@ window.whalePet.onAgentStatus((status) => {
   }
   if (status.done) {
     machine.request('talk', { force: true });
-    say(ad.done, 8000);
+    say(ad.done, 8000, true);
   }
   if (status.error) {
     const line = status.error.code === 'MISSING_CREDENTIAL'
       ? ad.missingKey
       : `${ad.errorPrefix}${status.error.code})`;
-    say(line, 10000);
+    say(line, 10000, true);
   }
   // Offline/error/crash get one bubble each, never a stream of them.
   if (status.phase === 'offline' && !agentNoticed.offline) {
     agentNoticed.offline = true;
     agentNoticed.crashed = false;
-    if (prev !== 'offline') say(status.crashed ? ad.crashed : ad.offline, 8000);
+    if (prev !== 'offline') say(status.crashed ? ad.crashed : ad.offline, 8000, true);
   }
 });
+
+// Test-only introspection/control for the Electron regression tests; unused
+// by the product itself.
+window.__whalePetDebug = {
+  get chatting() { return chatting; },
+  get approvalUp() { return approvalUp; },
+  get agentPhase() { return agentPhase; },
+  get machineState() { return machine.current; },
+  requestState: (name, force) => machine.request(name, { force: force === true }),
+};
