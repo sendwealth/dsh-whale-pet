@@ -2,7 +2,7 @@
 
 // L4 W2: main-process agent bridge. The Electron pet becomes the avatar of
 // a real DSH agent: a `dsh --profile sdk` runtime subprocess spawned and
-// owned here, exactly like the W1 PoC (l4-poc/demo.mjs). The SDK client is
+// owned here. The SDK client is
 // an ESM module imported dynamically from the local harness checkout's
 // built lib, so this file stays CommonJS like the rest of app/.
 //

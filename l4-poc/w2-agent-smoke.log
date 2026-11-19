@@ -1,9 +1,0 @@
-[2026-11-19T04:02:05.026Z] status {"phase":"connecting"}
-[2026-11-19T04:02:05.589Z] status {"phase":"idle"}
-[2026-11-19T04:02:05.595Z] status {"phase":"running"}
-[2026-11-19T04:02:05.597Z] task {"ok":true}
-[2026-11-19T04:02:05.637Z] status {"phase":"idle","done":true,"error":{"code":"MISSING_CREDENTIAL","message":"llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment"}}
-[2026-11-19T04:02:05.637Z] verdict {"verdict":"cycle-complete"}
-[2026-11-19T04:02:05.637Z] approval-api {"approve":"function","reject":"function"}
-[2026-11-19T04:02:05.672Z] status {"phase":"offline"}
-[2026-11-19T04:02:05.672Z] phases {"final":"offline","observed":["connecting","idle","running","offline"]}

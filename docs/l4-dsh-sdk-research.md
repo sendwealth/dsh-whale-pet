@@ -124,7 +124,7 @@ Web/Desktop GUI 的连接栈:
 
 ## W1 PoC 结果
 
-实现:`l4-poc/demo.mjs`(纯 Node,无 Electron)。运行记录见 `l4-poc/run.log`。
+实现:原型见本文件的历史记录（PoC 代码已随 `l4-poc/` 目录移除）；产品化实现见 `app/agent-bridge.js`,离线冒烟见 `app/agent-smoke.js`。
 
 ### 连接方式实际形态
 
