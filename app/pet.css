@@ -56,3 +56,25 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 .sparkle.s2 { right: -14px; top: 44px; width: 15px; height: 15px; }
 .pet.happy .sparkle { animation: sparkle .5s ease-out 3; }
 @keyframes sparkle { 0% { opacity: 0; scale: .6 } 35% { opacity: 1; scale: 1 } 100% { opacity: 0; scale: 1.2 } }
+
+/* ---- Sensor poses (L2) ---- */
+/* She tilts toward a cursor that loiters beside her. */
+.pet.leaning .figure { animation: lean 2.6s ease-in-out 2; }
+@keyframes lean { 0%,100% { transform: rotate(0) translateX(0) }
+  40% { transform: rotate(9deg) translateX(10px) } }
+
+/* System-idle doze: not the deep night sleep, just a slow droop with a
+   softened figure; any state change or interaction lifts it. */
+.pet.doze .figure { animation: doze 5s ease-in-out infinite; }
+.pet.doze .figure img { filter: grayscale(.4) brightness(.9)
+  drop-shadow(0 6px 10px rgba(40,60,140,.28)); }
+@keyframes doze { 0%,100% { transform: translateY(0) rotate(0) }
+  50% { transform: translateY(8px) rotate(5deg) } }
+
+/* Sustained CPU load: a fretful little shiver. */
+.pet.worried .figure { animation: worried .3s ease-in-out infinite; }
+@keyframes worried { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-2px) rotate(1.5deg) } }
+
+/* Fullscreen app owns the display: fade out and ignore input. */
+.pet { transition: opacity .8s ease; }
+.pet.gone { opacity: 0; pointer-events: none; }

@@ -48,6 +48,25 @@ const DICTS = {
       '再戳我要喷水了哦！',
       '肚子是鲸鱼娘的逆鳞！生气了！',
     ],
+    mouseApproach: [
+      { t: '呀！你悄悄靠近想干什么～' },
+      { t: '哇！来得好快！有什么事吗？', when: ['morning', 'afternoon'] },
+      { t: '深夜突袭……吓我一跳啦！', when: ['night'] },
+    ],
+    mouseNear: [
+      { t: '就一直停在这里看着我……我帮你盯着屏幕好啦。' },
+      { t: '你在我旁边待了好久，是在陪我吗？', when: ['evening', 'night'] },
+    ],
+    doze: [
+      { t: '主人好久没动了……我先眯一会儿……', when: ['weekday'] },
+      { t: '大家都去哪儿了呀……Zzz……', when: ['weekend'] },
+      { t: '安静得像深海……我打个小盹哦。' },
+    ],
+    cpuBusy: [
+      { t: '呜……电脑好烫，我仿佛在热汤里游泳！' },
+      { t: '主机在喘粗气！要不要歇一歇再战？', when: ['weekday'] },
+      { t: '风扇声好吵，我都有点担心你了……', when: ['night'] },
+    ],
   },
   en: {
     greet: 'Hi! I am the whale girl, floating on your desktop now!',
@@ -88,6 +107,25 @@ const DICTS = {
       'Boing! No poking my belly!',
       'Poke me again and I will spout water!',
       'The belly is a whale girl\'s weak spot! Hmph!',
+    ],
+    mouseApproach: [
+      { t: 'Eek! Sneaking up on me~ what is it?' },
+      { t: 'Whoa, that was fast! Anything I can help with?', when: ['morning', 'afternoon'] },
+      { t: 'A midnight ambush… you startled me!', when: ['night'] },
+    ],
+    mouseNear: [
+      { t: 'You have been hovering here a while… I will keep the screen company.' },
+      { t: 'Staying by my side this long? That is sweet.', when: ['evening', 'night'] },
+    ],
+    doze: [
+      { t: 'No one has moved for ages… just a tiny nap…', when: ['weekday'] },
+      { t: 'Where did everybody go… Zzz…', when: ['weekend'] },
+      { t: 'Quiet as the deep sea… dozing off for a bit.' },
+    ],
+    cpuBusy: [
+      { t: 'Phew… the computer is boiling, I feel like swimming in soup!' },
+      { t: 'Your PC is panting! Maybe take a breather?', when: ['weekday'] },
+      { t: 'The fans are so loud… I am a little worried about you.', when: ['night'] },
     ],
   },
 };
@@ -135,6 +173,8 @@ const machine = WhaleStates.create({
   onEnter(name) {
     const css = WhaleStates.STATES[name].css;
     if (css !== null) pet.classList.add(css);
+    // Any real state change ends a sensor-induced doze/lean/worry pose.
+    pet.classList.remove('doze', 'leaning', 'worried');
   },
   onExit(name) {
     const css = WhaleStates.STATES[name].css;
@@ -202,7 +242,7 @@ function zoneFor(y) {
 
 const SETTINGS_KEY = 'whale-pet-settings';
 const TALK_INTERVALS = { talkative: 9000, normal: 18000, quiet: 45000 };
-const settings = { muted: false, talkativeness: 'normal' };
+const settings = { muted: false, talkativeness: 'normal', sensors: true };
 try { Object.assign(settings, JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (err) { /* fall back to defaults on corrupt storage */ }
 if (!(settings.talkativeness in TALK_INTERVALS)) settings.talkativeness = 'normal';
 
@@ -220,18 +260,24 @@ for (const key of Object.keys(settings)) window.whalePet.setSetting(key, setting
 window.whalePet.onSettingsChanged((remote) => {
   Object.assign(settings, remote);
   saveSettings();
+  Sensors.setEnabled(settings.sensors !== false);
   scheduleIdleChatter();
 });
 
 // ---- Idle chatter ----------------------------------------------------------
 
+// While a fullscreen app (or the lock screen) owns the display she fades out
+// and stays quiet until it goes away.
+let fullscreenHidden = false;
+
 let idleTimer = 0;
 function scheduleIdleChatter() {
   window.clearTimeout(idleTimer);
+  if (fullscreenHidden) return;
   idleTimer = window.setTimeout(idleChatter, TALK_INTERVALS[settings.talkativeness]);
 }
 function idleChatter() {
-  if (!bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
+  if (fullscreenHidden || !bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
     scheduleIdleChatter();
     return;
   }
@@ -251,7 +297,7 @@ let press = null;
 let dragging = false;
 
 pet.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || fullscreenHidden) return;
   event.preventDefault();
   pet.setPointerCapture(event.pointerId);
   press = { x: event.clientX, y: event.clientY };
@@ -304,3 +350,57 @@ pet.addEventListener('dblclick', () => {
 
 say(dict.greet);
 scheduleIdleChatter();
+
+// ---- Sensors (L2: local system awareness) ----------------------------------
+
+// A lean pose lasts a few seconds on its own, independent of the machine.
+let leanTimer = 0;
+function leanIn() {
+  window.clearTimeout(leanTimer);
+  pet.classList.add('leaning');
+  leanTimer = window.setTimeout(() => { pet.classList.remove('leaning'); }, 6000);
+}
+
+Sensors.on('mouse-approach', () => {
+  if (fullscreenHidden || machine.current === 'sleep') return;
+  machine.request('curious');
+  say(pickCtx(dict.mouseApproach));
+});
+
+Sensors.on('mouse-near', () => {
+  if (fullscreenHidden || machine.current === 'sleep') return;
+  machine.request('curious');
+  leanIn();
+  say(pickCtx(dict.mouseNear));
+});
+
+// Long system idle makes her doze; the real night sleep (higher priority,
+// forced by the sleep rhythm interval) still wins over this visual doze.
+Sensors.on('idle-long', () => {
+  if (fullscreenHidden || machine.current === 'sleep' || pet.classList.contains('doze')) return;
+  pet.classList.add('doze');
+  say(pickCtx(dict.doze));
+});
+
+Sensors.on('cpu-busy', () => {
+  if (fullscreenHidden || machine.current === 'sleep') return;
+  pet.classList.add('worried');
+  say(pickCtx(dict.cpuBusy));
+});
+
+Sensors.on('cpu-calm', () => {
+  pet.classList.remove('worried');
+});
+
+Sensors.on('fullscreen-changed', (fullscreen) => {
+  fullscreenHidden = fullscreen;
+  if (fullscreen) {
+    window.clearTimeout(idleTimer);
+    pet.classList.add('gone');
+  } else {
+    pet.classList.remove('gone');
+    scheduleIdleChatter();
+  }
+});
+
+if (settings.sensors !== false) Sensors.setEnabled(true);

@@ -1,6 +1,7 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerMonitor } = require('electron');
+const os = require('os');
 const path = require('path');
 
 /** Whether the current display server accepts transparent windows. */
@@ -40,7 +41,11 @@ function createWindow() {
   // Keep her inside the visible desktop after display changes.
   win.on('moved', clampToWorkArea);
   screen.on('display-metrics-changed', clampToWorkArea);
+  // Sensor polls run only while she is visible; hiding her stops them.
+  win.on('show', restartSensorPolls);
+  win.on('hide', stopSensorPolls);
   win.on('closed', () => {
+    stopSensorPolls();
     if (dragState !== null && dragState.timer !== null) clearTimeout(dragState.timer);
     dragState = null;
     win = null;
@@ -75,7 +80,7 @@ app.whenReady().then(() => {
 
 // The renderer owns the settings (persisted in localStorage) and pushes them
 // here; the tray menu mirrors them and its clicks push changes back.
-let settings = { muted: false, talkativeness: 'normal' };
+let settings = { muted: false, talkativeness: 'normal', sensors: true };
 
 function rebuildTrayMenu() {
   if (tray === null) return;
@@ -97,6 +102,12 @@ function rebuildTrayMenu() {
             { label: '安静 / Quiet', type: 'radio', checked: settings.talkativeness === 'quiet', click: () => { applySetting('talkativeness', 'quiet'); } },
           ],
         },
+        {
+          label: '传感器 / Sensors',
+          type: 'checkbox',
+          checked: settings.sensors,
+          click: () => { applySetting('sensors', !settings.sensors); },
+        },
       ],
     },
     { label: '显示 / Show', click: () => { win?.show(); } },
@@ -108,13 +119,15 @@ function rebuildTrayMenu() {
 function applySetting(key, value) {
   settings[key] = value;
   rebuildTrayMenu();
+  // The renderer owns the sensor subscriptions; turning them off from the
+  // tray is forwarded through the settings push below.
   if (win !== null && !win.isDestroyed()) win.webContents.send('whale:settings-changed', settings);
 }
 
 ipcMain.handle('whale:get-settings', () => settings);
 
 ipcMain.handle('whale:set-setting', (_event, key, value) => {
-  if (key !== 'muted' && key !== 'talkativeness') return;
+  if (key !== 'muted' && key !== 'talkativeness' && key !== 'sensors') return;
   applySetting(key, value);
 });
 
@@ -151,4 +164,117 @@ ipcMain.handle('whale:hide', () => {
 ipcMain.handle('whale:quit', () => {
   quitRequested = true;
   app.quit();
+});
+
+// ---- Sensors (cursor proximity, system idle, CPU load, fullscreen) --------
+//
+// All polls are main-process timers gated on (a) at least one renderer
+// subscription and (b) the window being visible, so a hidden pet or sensors
+// turned off never leaves a spinning timer.
+
+const CURSOR_POLL_MS = 200;
+const CPU_POLL_MS = 1000;
+
+let cursorClients = 0;
+let cursorTimer = null;
+let fullscreenState = null;
+let fullscreenTick = 0;
+
+let cpuClients = 0;
+let cpuTimer = null;
+let cpuPrevTimes = null;
+
+function windowUsable() {
+  return win !== null && !win.isDestroyed() && win.isVisible();
+}
+
+// Fullscreen approximation: an exclusive-fullscreen app makes the display's
+// workArea collapse onto the full bounds. Limitation: a desktop environment
+// with an auto-hiding panel (or no panel at all) also reports
+// workArea == bounds, so she may fade on panel-less setups; and a fullscreen
+// window on another display is only detected via that display's workArea.
+// Lock-screen events from powerMonitor are treated as fullscreen too.
+function computeFullscreen() {
+  const bounds = win.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  return display.bounds.width - display.workArea.width < 4
+    && display.bounds.height - display.workArea.height < 4;
+}
+
+function pushFullscreen(value) {
+  if (fullscreenState === value) return;
+  fullscreenState = value;
+  if (windowUsable()) win.webContents.send('whale:fullscreen', value);
+}
+
+function cursorTick() {
+  if (!windowUsable()) { stopSensorPolls(); return; }
+  const point = screen.getCursorScreenPoint();
+  const [winX, winY] = win.getPosition();
+  let idleSeconds = 0;
+  try { idleSeconds = powerMonitor.getSystemIdleTime(); } catch (err) { /* powerMonitor unavailable on some DEs; report 0 */ }
+  win.webContents.send('whale:cursor', { x: point.x, y: point.y, winX, winY, idle: idleSeconds });
+  // Reuse the cursor poll for a ~1 Hz fullscreen check.
+  if (++fullscreenTick >= 5) {
+    fullscreenTick = 0;
+    pushFullscreen(computeFullscreen());
+  }
+}
+
+function cpuTick() {
+  if (!windowUsable()) { stopSensorPolls(); return; }
+  const times = os.cpus().map((c) => c.times);
+  let load = 0;
+  if (cpuPrevTimes !== null && times.length === cpuPrevTimes.length) {
+    let idle = 0;
+    let total = 0;
+    for (let i = 0; i < times.length; i++) {
+      const prev = cpuPrevTimes[i];
+      const cur = times[i];
+      total += (cur.user - prev.user) + (cur.nice - prev.nice) + (cur.sys - prev.sys)
+        + (cur.idle - prev.idle) + (cur.irq - prev.irq);
+      idle += cur.idle - prev.idle;
+    }
+    if (total > 0) load = 1 - idle / total;
+  }
+  cpuPrevTimes = times;
+  win.webContents.send('whale:cpu', load);
+}
+
+function startSensorPolls() {
+  if (cursorClients > 0 && cursorTimer === null) {
+    cursorTimer = setInterval(cursorTick, CURSOR_POLL_MS);
+  }
+  if (cpuClients > 0 && cpuTimer === null) {
+    cpuPrevTimes = null;
+    cpuTimer = setInterval(cpuTick, CPU_POLL_MS);
+  }
+}
+
+function stopSensorPolls() {
+  if (cursorTimer !== null) { clearInterval(cursorTimer); cursorTimer = null; }
+  if (cpuTimer !== null) { clearInterval(cpuTimer); cpuTimer = null; }
+}
+
+function restartSensorPolls() {
+  stopSensorPolls();
+  if (windowUsable()) startSensorPolls();
+}
+
+ipcMain.handle('whale:cursor-subscribe', (_event, on) => {
+  cursorClients = Math.max(0, cursorClients + (on ? 1 : -1));
+  if (cursorClients === 0 && cpuClients === 0) fullscreenState = null;
+  restartSensorPolls();
+});
+
+ipcMain.handle('whale:cpu-subscribe', (_event, on) => {
+  cpuClients = Math.max(0, cpuClients + (on ? 1 : -1));
+  restartSensorPolls();
+});
+
+// Lock screens read as fullscreen so she fades with the session.
+powerMonitor.on('lock-screen', () => { pushFullscreen(true); });
+powerMonitor.on('unlock-screen', () => {
+  if (windowUsable()) pushFullscreen(computeFullscreen());
+  else fullscreenState = null;
 });
