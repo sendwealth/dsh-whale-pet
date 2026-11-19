@@ -17,7 +17,7 @@ const FLUSH_DELAY_MS = 1500;
 const FACT_PATTERNS = [
   ['name', /(?:我叫|我的名字是|称呼我|call me|i am|i'm|my name is)\s*([\p{L}\p{N}_-]{1,20})/iu],
   ['project', /(?:在做|在写|在开发|负责|维护)\s*(?:一个|一项)?\s*([\p{L}\p{N}_.-]{2,30})/u],
-  ['projectEn', /(?:working on|building|maintaining)\s+(?:the\s+|my\s+)?([\p{L}\p{N}_.-]{2,30})/i],
+  ['projectEn', /(?:working on|building|maintaining)\s+(?:the\s+|my\s+)?([\p{L}\p{N}_.-]{2,30})/iu],
   ['wakeTime', /(?:我)?(?:一般|通常|平时)?(?:每天)?(\d{1,2})\s*[点:.：]\s*(\d{2})?\s*(?:起床|起来|醒来)/],
   ['sleepTime', /(?:我)?(?:一般|通常|平时)?(?:每天)?(?:晚上|夜里)?(\d{1,2})\s*[点:.：]?\s*(\d{2})?\s*(?:睡觉|睡|休息)/],
   ['likes', /(?:我喜欢|我爱|我最喜欢|我最爱|i (?:really )?(?:like|love))\s*([\p{L}\p{N}，、和与\s]{1,30}?)(?=[。.!！?？]|$)/iu],
@@ -40,7 +40,11 @@ function normalizeMatch(key, match) {
     if (!Number.isFinite(cups) || cups < 1 || cups > 20) return null;
     return `主人每天要喝 ${cups} 杯咖啡`;
   }
-  const text = String(match[1]).trim().replace(/\s+/g, ' ');
+  let text = String(match[1]).trim().replace(/\s+/g, ' ');
+  // Chinese "在做 X(这个)项目" phrasing lets the project filler leak into
+  // the capture; strip the trailing 指示词+项目 suffix so the stored fact
+  // is the bare project name.
+  text = text.replace(/(?:这个|该|此|一?个)?项目$/, '').trim();
   if (text.length < 1 || text.length > 40) return null;
   const labels = {
     name: '主人叫',
@@ -50,8 +54,7 @@ function normalizeMatch(key, match) {
     dislikes: '主人不喜欢',
   };
   if (!(key in labels)) return null;
-  const suffix = key === 'name' ? '' : key.startsWith('project') ? '这个项目' : '';
-  return `${labels[key]} ${text}${suffix}`;
+  return `${labels[key]} ${text}`;
 }
 
 class Memory {

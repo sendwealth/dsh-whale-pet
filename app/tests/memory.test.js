@@ -26,7 +26,7 @@ test('extractFacts: Chinese name, project, wake/sleep times, coffee', () => {
   mem.extractFacts('我每天7:30起床，晚上11点睡觉，每天要喝3杯咖啡');
   const texts = mem.facts.map((f) => f.text).sort();
   assert.ok(texts.includes('主人叫 小鲸'), texts.join('|'));
-  assert.ok(texts.some((t) => t.startsWith('主人在做 鲸鱼娘桌宠')), texts.join('|'));
+  assert.ok(texts.includes('主人在做 鲸鱼娘桌宠'), texts.join('|'));
   assert.ok(texts.includes('主人通常 07:30 起床'), texts.join('|'));
   assert.ok(texts.includes('主人通常 11:00 睡觉'), texts.join('|'));
   assert.ok(texts.includes('主人每天要喝 3 杯咖啡'), texts.join('|'));
@@ -45,14 +45,23 @@ test('extractFacts: English name, likes, dislikes', () => {
   teardown(mem);
 });
 
-test('extractFacts: projectEn currently fails on ordinary English words (pinned; see report)', () => {
+test('extractFacts: projectEn captures unicode word runs (u flag regression)', () => {
   const dir = tmpDir();
   const mem = new Memory(dir);
   mem.extractFacts("I'm working on the whale-pet project.");
-  // The projectEn pattern lacks the `u` regex flag, so its \\p{L} class is a
-  // literal character set and "whale-pet" does not match. Pins current
-  // behavior; flagged as a suspected bug in the test report.
-  assert.equal(mem.facts.some((f) => f.key === 'projectEn'), false);
+  const fact = mem.facts.find((f) => f.key === 'projectEn');
+  assert.ok(fact, 'projectEn fact missing: ' + JSON.stringify(mem.facts));
+  assert.equal(fact.text, '主人在做 whale-pet');
+  teardown(mem);
+});
+
+test('extractFacts: Chinese project capture strips the 这个项目 filler suffix', () => {
+  const dir = tmpDir();
+  const mem = new Memory(dir);
+  mem.extractFacts('我在做一个鲸鱼娘桌宠这个项目');
+  const fact = mem.facts.find((f) => f.key === 'project');
+  assert.ok(fact, 'project fact missing: ' + JSON.stringify(mem.facts));
+  assert.equal(fact.text, '主人在做 鲸鱼娘桌宠');
   teardown(mem);
 });
 

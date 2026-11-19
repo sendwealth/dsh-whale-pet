@@ -17,28 +17,50 @@ test('starts in idle and reports minDur per state', () => {
   assert.equal(m.minDur('sleep'), 8000);
 });
 
-test('rejects transition inside the current state minDur window', () => {
+test('inside the minDur window only a strictly higher priority may interrupt', () => {
   const clock = makeClock();
   const m = WhaleStates.create({}, clock.now);
-  assert.equal(m.request('curious'), false); // idle minDur 4000 not elapsed
-  assert.equal(m.current, 'idle');
-  clock.advance(3999);
-  assert.equal(m.request('curious'), false); // still inside the window
+  // Equal priority (shy 3 vs happy 3): blocked until the window ends.
+  assert.equal(m.request('shy', { force: true }), true);
+  clock.advance(100);
+  assert.equal(m.request('happy'), false); // happy 3 <= shy 3 inside the window
+  clock.advance(2499);
+  assert.equal(m.request('happy'), false); // still inside the window
   clock.advance(1);
-  assert.equal(m.request('curious'), true); // exactly at minDur boundary
-  assert.equal(m.current, 'curious');
+  assert.equal(m.request('happy'), true); // exactly at minDur boundary
+  assert.equal(m.current, 'happy');
 });
 
-test('force bypasses the minDur window', () => {
+test('curious cannot interrupt sleep inside its window, angry can', () => {
   const clock = makeClock();
   const m = WhaleStates.create({}, clock.now);
-  assert.equal(m.request('sleep'), false);
+  assert.equal(m.request('sleep', { force: true }), true);
+  clock.advance(100);
+  assert.equal(m.request('curious'), false); // curious 2 <= sleep 4
+  assert.equal(m.current, 'sleep');
+  assert.equal(m.request('angry'), true); // angry 5 > sleep 4
+  assert.equal(m.current, 'angry');
+});
+
+test('lower-priority state waits out the window even of a lower state', () => {
+  const clock = makeClock();
+  const m = WhaleStates.create({}, clock.now);
+  assert.equal(m.request('talk', { force: true }), true);
+  clock.advance(2999);
+  assert.equal(m.request('idle'), false); // idle 0 <= talk 1 inside the window
+  clock.advance(1);
+  assert.equal(m.request('idle'), true);
+});
+
+test('force bypasses the minDur window and the priority rule', () => {
+  const clock = makeClock();
+  const m = WhaleStates.create({}, clock.now);
   assert.equal(m.request('sleep', { force: true }), true);
   assert.equal(m.current, 'sleep');
   clock.advance(1);
   // Force works even one tick into a new state's own minDur window.
-  assert.equal(m.request('angry', { force: true }), true);
-  assert.equal(m.current, 'angry');
+  assert.equal(m.request('curious', { force: true }), true); // would fail the priority rule
+  assert.equal(m.current, 'curious');
 });
 
 test('rejects unknown states and re-requesting the current state', () => {
@@ -54,11 +76,11 @@ test('new state restarts its own minDur window', () => {
   const clock = makeClock();
   const m = WhaleStates.create({}, clock.now);
   clock.advance(10000);
-  assert.equal(m.request('talk'), true); // talk minDur 3000
-  clock.advance(2999);
-  assert.equal(m.request('curious'), false); // talk window still open
+  assert.equal(m.request('shy'), true); // shy minDur 2600
+  clock.advance(2599);
+  assert.equal(m.request('talk'), false); // talk 1 <= shy 3, window still open
   clock.advance(1);
-  assert.equal(m.request('curious'), true);
+  assert.equal(m.request('talk'), true);
 });
 
 test('fires onExit(prev) then onEnter(name, prev) in order', () => {
