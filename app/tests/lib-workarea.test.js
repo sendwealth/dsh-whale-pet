@@ -44,3 +44,14 @@ test('decideFullscreenSample: first sample becomes the baseline', () => {
   assert.deepEqual(decideFullscreenSample(false, true), { baseline: false, value: true });
   assert.deepEqual(decideFullscreenSample(false, false), { baseline: false, value: false });
 });
+
+test('decideFullscreenSample: nulling a stale baseline re-baselines the display', () => {
+  // Panel-less baseline latched on the old display; main.js resets the
+  // baseline to null on display-metrics-changed/added so the next sample
+  // on the new display starts fresh instead of disabling detection.
+  assert.deepEqual(decideFullscreenSample(true, true), { baseline: true, value: false });
+  // After the reset (baseline -> null): a paneled display now samples its
+  // own baseline and detection works again.
+  assert.deepEqual(decideFullscreenSample(null, false), { baseline: false, value: false });
+  assert.deepEqual(decideFullscreenSample(false, true), { baseline: false, value: true });
+});

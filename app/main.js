@@ -38,7 +38,17 @@ function createWindow() {
 
   // Keep her inside the visible desktop after display changes.
   win.on('moved', clampToWorkArea);
-  screen.on('display-metrics-changed', clampToWorkArea);
+  // Display topology/metric changes invalidate the fullscreen baseline: it
+  // was sampled on the old display and a wrong one disables detection for
+  // the whole session. Drop it and re-sample (P1-2).
+  const rebaseFullscreen = () => {
+    fullscreenBaseline = null;
+    fullscreenState = true; // force the next push to differ
+    sampleFullscreen();
+  };
+  screen.on('display-metrics-changed', (_e, _display) => { rebaseFullscreen(); clampToWorkArea(); });
+  screen.on('display-added', rebaseFullscreen);
+  screen.on('display-removed', () => { rebaseFullscreen(); clampToWorkArea(); });
   // Sensor polls run only while she is visible; hiding her stops them.
   win.on('show', restartSensorPolls);
   win.on('hide', stopSensorPolls);

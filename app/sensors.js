@@ -107,7 +107,25 @@ const Sensors = (() => {
     enabled = on;
     window.whalePet.subscribeCursor(enabled);
     window.whalePet.subscribeCpu(enabled);
+    if (!on) {
+      // No data source anymore: reset the latches so a re-enable starts
+      // clean, and tell listeners CPU worries are over (the pet drops the
+      // worried pose) instead of leaving it stuck until the next poke.
+      lastSample = null;
+      lastApproach = 0;
+      nearSince = 0;
+      nearFired = false;
+      idleFired = false;
+      cpuHighSince = 0;
+      if (cpuBusyFired) {
+        cpuBusyFired = false;
+        emit('cpu-calm', { load: 0 });
+      }
+    }
   }
 
   return { on, setEnabled };
 })();
+
+// Plain <script> in the renderer; export only under CommonJS (unit tests).
+if (typeof module !== 'undefined' && module.exports) module.exports = Sensors;
