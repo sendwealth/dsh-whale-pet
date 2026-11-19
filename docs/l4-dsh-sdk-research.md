@@ -122,5 +122,43 @@ Web/Desktop GUI 的连接栈:
 
 验收标准:桌宠静止时 idle、任务中 swim/思考动画;agent 请求审批时气泡显示工具名与理由,点击允许/拒绝后 agent 相应继续或失败关闭;全程无未捕获协议错误。
 
+## W1 PoC 结果
+
+实现:`l4-poc/demo.mjs`(纯 Node,无 Electron)。运行记录见 `l4-poc/run.log`。
+
+### 连接方式实际形态
+
+- **SDK 实际包名**:`@deepseek-ai/dsh-sdk-client`,版本 `0.2.2-rc.3`(与 `@deepseek-ai/dsh` 同版本,launch 时强校验)。导出:`DeepSeekHarness` / `HarnessSession`(高层)、`HarnessClient`(协议层)、`TransportClosedError` / `RequestTimeoutError` / `SdkProtocolError` / `JsonRpcResponseError`。
+- **引用方式**:harness 是 pnpm workspace 且 SDK client 的依赖全是 `workspace:*`,无法直接 `file:` 链接安装。PoC 采用**从 harness 检出直接 import 构建产物**:`import { HarnessClient } from '/home/rowan/Projects/deepseek-harness/packages/sdk/client/lib/index.js'`——其内部 bare import 经该包自己的 `node_modules`(pnpm 链接)解析,零安装即可用。发布形态再考虑 npm 安装或 vendoring。
+- **spawn 命令**(launch.ts 解析结果):`node /home/rowan/Projects/deepseek-harness/apps/cli/lib/bin.js --profile sdk`,env 注入 `DSH_HOME=<绝对路径>`。若构建产物缺失则回退 `node --import tsx/esm apps/cli/src/bin.ts --profile sdk --patch src/sdk-source.cordis.patch.yml`。不需要 shell 包装,`pnpm dsh` 也不需要。
+- **initialize 参数**:`{ cwd, provider: 'deepseek-official', model: 'deepseek-official', approvalRequests: true }`;`capabilities.userQuestions: true` 由客户端在构造 options 里给了 `onUserQuestion` 回调时自动附加。返回 `{"serverInfo":{"name":"deepseek-harness-sdk-runtime","version":"0.0.1"}}`。
+- **回调注册**:`client.start()` 之后才能 `client.onRequest(handler)`(顺序错误抛 `TransportClosedError`);`user-question/ask` 走构造参数 `onUserQuestion`,不经过 `onRequest`;通知用 `client.subscribe(cb)`。
+
+### 通知的实际 JSON 形状(run.log 实测)
+
+- `session.status`:`{"sessionId":"w1-poc","status":"running"}` → `{"sessionId":"w1-poc","status":"idle"}`(桌宠动画的直接信号源,确认可用)
+- `session.event`:信封 `{"sessionId","event":{type,seq,time,data}}`,实测类型含 `permission/preset`、`sandbox/mode`、`approval/policy`(policy:"ask")、`agent/inbox/spliced`、`turn/start`、`step/start`、`system/message`、`user/message`、`request/header`(含全部工具 schema)、`request/context`、`session/title`、`assistant/attempt`、`step/end`、`turn/end`。注意单个事件可达数十 KB(request/header 含工具定义),UI 侧需过滤再渲染。
+- `session/prompt` 返回 `{"messageId":"<uuid>"}`;`session/wait` 在 root idle 后 resolve(即使 turn 以 error 结束也 resolve,不抛)。
+- 无 key 时 turn 诚实失败关闭:`assistant/attempt` 内 `finish.reason.kind:"error"`,code `MISSING_CREDENTIAL`(提示导出 `DEEPSEEK_API_KEY` 或经 credentials service 存储),随后 `turn/end` error + `session.status idle`。
+
+### 回调链逐项结论
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| spawn + initialize(approvalRequests:true) | ✅ | ~0.6s 完成握手,返回 serverInfo |
+| session/prompt 入队 + messageId 回执 | ✅ | |
+| session.status running/idle | ✅ | 无 key 也完整观测到(失败关闭路径) |
+| session.event 全量事件流 | ✅ | 见上,含失败错误事件 |
+| shutdown + close 拆除阶梯 | ✅ | `client.close()` 优雅退出,进程 exit 0 |
+| approval/request 服务端请求 → 回填 allowed-once | ⏳ TODO | 需真实 LLM 触发工具调用;环境无 `DEEPSEEK_API_KEY`(两个仓库及 `~/.dsh` 均无),未伪造。handler 已挂好,`onRequest` 路径经源码确认 |
+| user-question/ask | ⏳ TODO | 同上,`onUserQuestion` 回调已挂,`capabilities.userQuestions` 声明逻辑经源码确认 |
+
+### 遇到的问题与解法
+
+1. **workspace 依赖无法 file: 安装**:SDK client 依赖全是 `workspace:*`,pnpm/npm 装不进独立目录 → 直接 import harness 检出的 `packages/sdk/client/lib/index.js`,借 checkout 的 pnpm node_modules 解析,免安装。
+2. **无 API key**:demo 对 LLM 回合不伪造成功;真实 turn 失败关闭并原样记录 `MISSING_CREDENTIAL`,offline 最小链路(spawn → initialize → status/event → shutdown)完整跑通。带 key 复跑 `node demo.mjs` 即可补 approval/user-question 两项。
+3. **`onRequest` 必须在 `start()` 之后安装**:源码显式检查;demo 已按 start → onRequest 顺序。
+4. `session.event` 单事件体积大(工具 schema),桌宠侧消费必须先按 `event.type` 过滤。
+
 ---
 *调研来源:packages/sdk/{client,protocol,server}/README.md 与 src、packages/host/{webserver,authentication-token}/、packages/client/connection/、packages/api/README.md、python/README.md 与 python/sdk/README.md,均在 deepseek-harness 检出内。*

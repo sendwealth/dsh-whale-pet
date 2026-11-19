@@ -1,0 +1,10 @@
+{
+  "name": "dsh-whale-pet-l4-poc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "W1 PoC: drive a dsh --profile sdk runtime subprocess from plain Node via @deepseek-ai/dsh-sdk-client",
+  "scripts": {
+    "demo": "node demo.mjs"
+  }
+}
