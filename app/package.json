@@ -1,0 +1,16 @@
+{
+  "name": "dsh-whale-pet-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone DeepSeek whale-girl desktop pet (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.0.0"
+  },
+  "allowScripts": {
+    "electron@37.10.3": true
+  }
+}

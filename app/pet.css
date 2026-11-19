@@ -1,0 +1,33 @@
+html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
+  -webkit-user-select: none; user-select: none; }
+
+.pet { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end; cursor: grab; }
+.pet:active { cursor: grabbing; }
+.pet.dragging { cursor: grabbing; }
+
+/* The bubble floats above the figure without joining its layout, so her
+   on-screen position never shifts when a message appears or disappears. */
+.bubble { position: absolute; bottom: 183px; left: 50%;
+  width: max-content; max-width: 200px; transform: translateX(-50%); z-index: 2; }
+.bubble-text { padding: 8px 12px; border-radius: 12px; animation: pop .18s ease-out;
+  background: #ffffff; color: #1c2733; border: 1px solid rgba(0,0,0,.2);
+  box-shadow: 0 4px 14px rgba(0,0,0,.18); font: 12px/1.5 system-ui, sans-serif; }
+.bubble-text::after { content: ''; position: absolute; left: 24px; bottom: -6px;
+  width: 10px; height: 10px; border-right: 1px solid rgba(0,0,0,.2);
+  border-bottom: 1px solid rgba(0,0,0,.2); transform: rotate(45deg); background: #ffffff; }
+@keyframes pop { from { opacity: 0; translate: 0 6px; scale: .9; } }
+
+.figure { position: relative; animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 85%; }
+.pet.happy .figure { animation: happy .5s ease-in-out 3; }
+.figure img { display: block; width: 130px; height: auto;
+  filter: drop-shadow(0 6px 10px rgba(40,60,140,.28)); }
+@keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
+@keyframes happy { 0%,100% { transform: translateY(0) rotate(0) }
+  25% { transform: translateY(-14px) rotate(-7deg) } 75% { transform: translateY(-4px) rotate(7deg) } }
+
+.sparkle { position: absolute; width: 20px; height: 20px; opacity: 0; }
+.sparkle.s1 { left: -12px; top: 10px; }
+.sparkle.s2 { right: -14px; top: 44px; width: 15px; height: 15px; }
+.pet.happy .sparkle { animation: sparkle .5s ease-out 3; }
+@keyframes sparkle { 0% { opacity: 0; scale: .6 } 35% { opacity: 1; scale: 1 } 100% { opacity: 0; scale: 1.2 } }
