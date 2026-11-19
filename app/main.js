@@ -9,7 +9,10 @@ let tray = null;
 let quitRequested = false;
 
 const WIN_WIDTH = 200;
-const WIN_HEIGHT = 330;
+// Figure (~173 px) plus headroom above her for the chat bubble. A taller
+// window would put invisible space above her head and stop her short of
+// the screen top.
+const WIN_HEIGHT = 240;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -47,9 +50,9 @@ function createWindow() {
 function clampToWorkArea() {
   if (win === null || win.isDestroyed()) return;
   const [x, y] = win.getPosition();
-  const area = screen.getDisplayNearestPoint({ x, y }).workArea;
-  const nx = Math.min(Math.max(x, area.x), area.x + area.width - WIN_WIDTH);
-  const ny = Math.min(Math.max(y, area.y), area.y + area.height - WIN_HEIGHT);
+  const bounds = screen.getDisplayNearestPoint({ x, y }).bounds;
+  const nx = Math.min(Math.max(x, bounds.x), bounds.x + bounds.width - WIN_WIDTH);
+  const ny = Math.min(Math.max(y, bounds.y), bounds.y + bounds.height - WIN_HEIGHT);
   if (nx !== x || ny !== y) win.setPosition(nx, ny);
 }
 

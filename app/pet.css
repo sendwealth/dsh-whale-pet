@@ -8,7 +8,7 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 
 /* The bubble floats above the figure without joining its layout, so her
    on-screen position never shifts when a message appears or disappears. */
-.bubble { position: absolute; bottom: 183px; left: 50%;
+.bubble { position: absolute; bottom: 178px; left: 50%;
   width: max-content; max-width: 200px; transform: translateX(-50%); z-index: 2; }
 .bubble-text { padding: 8px 12px; border-radius: 12px; animation: pop .18s ease-out;
   background: #ffffff; color: #1c2733; border: 1px solid rgba(0,0,0,.2);
