@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { registerChat } = require('./chat-main');
 const { registerAgentBridge } = require('./agent-bridge');
-const { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample } = require('./lib-workarea');
+const { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, sampleDisplayFullscreen } = require('./lib-workarea');
 
 /** Whether the current display server accepts transparent windows. */
 let win = null;
@@ -42,7 +42,7 @@ function createWindow() {
   // was sampled on the old display and a wrong one disables detection for
   // the whole session. Drop it and re-sample (P1-2).
   const rebaseFullscreen = () => {
-    fullscreenBaseline = null;
+    fullscreenBaselines.clear();
     fullscreenState = true; // force the next push to differ
     sampleFullscreen();
   };
@@ -244,16 +244,18 @@ function windowUsable() {
 
 // Fullscreen approximation: an exclusive-fullscreen app makes the display's
 // workArea collapse onto the full bounds. Desktops whose panels auto-hide or
-// do not exist report workArea == bounds all the time, so the first sample is
-// a baseline: detection only fires on a false -> true transition, and a
-// baseline that already reads fullscreen disables it for this display.
+// do not exist report workArea == bounds all the time, so each display gets
+// its own baseline (a secondary display without panels must not inherit the
+// primary's baseline, or dragging her there fades her permanently):
+// detection only fires on a false -> true transition, and a display whose
+// baseline already reads fullscreen disables it on that display.
 // Lock-screen events from powerMonitor are treated as fullscreen too.
-let fullscreenBaseline = null;
+const fullscreenBaselines = new Map();
 
 function computeFullscreen() {
   const bounds = win.getBounds();
   const display = screen.getDisplayMatching(bounds);
-  return isDisplayFullscreen(display.bounds, display.workArea);
+  return { display, isFullscreen: isDisplayFullscreen(display.bounds, display.workArea) };
 }
 
 function pushFullscreen(value) {
@@ -263,11 +265,10 @@ function pushFullscreen(value) {
 }
 
 function sampleFullscreen() {
-  // Baseline handling lives in lib-workarea.decideFullscreenSample: a
-  // display that reads fullscreen at baseline never had panels to lose.
-  const decision = decideFullscreenSample(fullscreenBaseline, computeFullscreen());
-  fullscreenBaseline = decision.baseline;
-  pushFullscreen(decision.value);
+  // sampleDisplayFullscreen keeps one baseline per display id: a display
+  // that reads fullscreen at baseline never had panels to lose.
+  const { display, isFullscreen } = computeFullscreen();
+  pushFullscreen(sampleDisplayFullscreen(fullscreenBaselines, display.id, isFullscreen));
 }
 
 function cursorTick() {
@@ -338,6 +339,8 @@ ipcMain.handle('whale:cpu-subscribe', (_event, on) => {
 // Lock screens read as fullscreen so she fades with the session.
 powerMonitor.on('lock-screen', () => { pushFullscreen(true); });
 powerMonitor.on('unlock-screen', () => {
-  if (windowUsable()) pushFullscreen(computeFullscreen());
+  // Route through sampleFullscreen, not a raw computeFullscreen: after a
+  // resume on a panel-less secondary display the raw read would fade her.
+  if (windowUsable()) sampleFullscreen();
   else fullscreenState = null;
 });

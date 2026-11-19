@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample } = require('../lib-workarea.js');
+const { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample, sampleDisplayFullscreen } = require('../lib-workarea.js');
 
 test('exports the pet window size used by main.js', () => {
   assert.equal(WIN_WIDTH, 200);
@@ -54,4 +54,21 @@ test('decideFullscreenSample: nulling a stale baseline re-baselines the display'
   // own baseline and detection works again.
   assert.deepEqual(decideFullscreenSample(null, false), { baseline: false, value: false });
   assert.deepEqual(decideFullscreenSample(false, true), { baseline: false, value: true });
+});
+
+test('sampleDisplayFullscreen: per-display baselines keep secondary displays from fading the pet', () => {
+  const baselines = new Map();
+  // Primary display with a panel: baseline false, detection armed.
+  assert.equal(sampleDisplayFullscreen(baselines, 1, false), false);
+  assert.equal(sampleDisplayFullscreen(baselines, 1, true), true);  // real fullscreen fades her
+  assert.equal(sampleDisplayFullscreen(baselines, 1, false), false);
+  // Panel-less secondary display: first sample latches its own baseline, so
+  // dragging her there must NOT report fullscreen (regression: the shared
+  // baseline made her fade permanently and Tray Show could not recover).
+  assert.equal(sampleDisplayFullscreen(baselines, 2, true), false);
+  assert.equal(sampleDisplayFullscreen(baselines, 2, true), false);
+  // Moving back to the primary keeps both baselines independent.
+  assert.equal(sampleDisplayFullscreen(baselines, 1, false), false);
+  assert.equal(baselines.get(1), false);
+  assert.equal(baselines.get(2), true);
 });

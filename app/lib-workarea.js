@@ -55,4 +55,23 @@ function decideFullscreenSample(baseline, current) {
   return { baseline: nextBaseline, value: nextBaseline ? false : current };
 }
 
-module.exports = { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample };
+/**
+ * Per-display fullscreen sample: each display keeps its own baseline in the
+ * shared map, because a panel-less secondary display reads fullscreen all
+ * the time and must not inherit the primary display's panel baseline.
+ *
+ * @param {Map<number, boolean>} baselines display id -> baseline
+ * @param {number} displayId sampled display id
+ * @param {boolean} current raw isDisplayFullscreen sample
+ * @returns {boolean} fullscreen value to push to the renderer
+ */
+function sampleDisplayFullscreen(baselines, displayId, current) {
+  const decision = decideFullscreenSample(
+    baselines.has(displayId) ? baselines.get(displayId) : null,
+    current,
+  );
+  baselines.set(displayId, decision.baseline);
+  return decision.value;
+}
+
+module.exports = { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample, sampleDisplayFullscreen };
