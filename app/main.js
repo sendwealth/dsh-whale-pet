@@ -5,17 +5,13 @@ const os = require('os');
 const path = require('path');
 const { registerChat } = require('./chat-main');
 const { registerAgentBridge } = require('./agent-bridge');
+const { WIN_WIDTH, WIN_HEIGHT, clampPosition, isDisplayFullscreen, decideFullscreenSample } = require('./lib-workarea');
 
 /** Whether the current display server accepts transparent windows. */
 let win = null;
 let tray = null;
 let quitRequested = false;
 
-const WIN_WIDTH = 200;
-// Figure (~173 px) plus headroom above her for the chat bubble. A taller
-// window would put invisible space above her head and stop her short of
-// the screen top.
-const WIN_HEIGHT = 240;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -58,9 +54,8 @@ function clampToWorkArea() {
   if (win === null || win.isDestroyed()) return;
   const [x, y] = win.getPosition();
   const bounds = screen.getDisplayNearestPoint({ x, y }).bounds;
-  const nx = Math.min(Math.max(x, bounds.x), bounds.x + bounds.width - WIN_WIDTH);
-  const ny = Math.min(Math.max(y, bounds.y), bounds.y + bounds.height - WIN_HEIGHT);
-  if (nx !== x || ny !== y) win.setPosition(nx, ny);
+  const next = clampPosition(x, y, bounds, WIN_WIDTH, WIN_HEIGHT);
+  if (next !== null) win.setPosition(next.x, next.y);
 }
 
 let chatApi = null;
@@ -248,8 +243,7 @@ let fullscreenBaseline = null;
 function computeFullscreen() {
   const bounds = win.getBounds();
   const display = screen.getDisplayMatching(bounds);
-  return display.bounds.width - display.workArea.width < 4
-    && display.bounds.height - display.workArea.height < 4;
+  return isDisplayFullscreen(display.bounds, display.workArea);
 }
 
 function pushFullscreen(value) {
@@ -259,12 +253,11 @@ function pushFullscreen(value) {
 }
 
 function sampleFullscreen() {
-  const current = computeFullscreen();
-  if (fullscreenBaseline === null) fullscreenBaseline = current;
-  // A display that reads fullscreen at baseline never had panels to lose;
-  // treat it as never-fullscreen so the pet cannot fade forever there.
-  if (fullscreenBaseline) { pushFullscreen(false); return; }
-  pushFullscreen(current);
+  // Baseline handling lives in lib-workarea.decideFullscreenSample: a
+  // display that reads fullscreen at baseline never had panels to lose.
+  const decision = decideFullscreenSample(fullscreenBaseline, computeFullscreen());
+  fullscreenBaseline = decision.baseline;
+  pushFullscreen(decision.value);
 }
 
 function cursorTick() {

@@ -1,0 +1,22 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Electron needs libgbm; xvfb provides the display for the DOM smoke.
+      # If the headless DOM smoke turns out flaky on CI, set WHALE_SKIP_DOM: 1
+      # in the npm test env to skip it (it still runs on dev desktops).
+      - run: sudo apt-get update && sudo apt-get install -y libgbm1 xvfb
+      - run: npm ci
+        working-directory: app
+      - run: xvfb-run -a npm test
+        working-directory: app

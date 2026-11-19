@@ -17,27 +17,28 @@ const WhaleStates = (() => {
   };
   const CSS_CLASSES = Object.values(STATES).map((s) => s.css).filter((c) => c !== null);
 
-  function create(hooks) {
+  // `now` is injectable for tests; production callers use Date.now.
+  function create(hooks, now = Date.now) {
     let current = 'idle';
-    let enteredAt = Date.now();
+    let enteredAt = now();
 
     function enter(name) {
       const prev = current;
       current = name;
-      enteredAt = Date.now();
+      enteredAt = now();
       if (hooks.onExit) hooks.onExit(prev);
       if (hooks.onEnter) hooks.onEnter(name, prev);
     }
 
     return {
       get current() { return current; },
-      get heldFor() { return Date.now() - enteredAt; },
+      get heldFor() { return now() - enteredAt; },
       minDur(name) { return STATES[name].minDur; },
       request(name, opts) {
         if (!(name in STATES) || name === current) return false;
         const force = Boolean(opts && opts.force);
         if (!force) {
-          if (Date.now() - enteredAt < STATES[current].minDur) return false;
+          if (now() - enteredAt < STATES[current].minDur) return false;
         }
         enter(name);
         return true;
@@ -47,3 +48,6 @@ const WhaleStates = (() => {
 
   return { create, STATES, CSS_CLASSES };
 })();
+
+// Plain <script> in the renderer; export only under CommonJS (unit tests).
+if (typeof module !== 'undefined' && module.exports) module.exports = WhaleStates;

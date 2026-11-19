@@ -5,7 +5,8 @@
   "description": "Standalone DeepSeek whale-girl desktop pet (Electron)",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
     "electron": "^37.0.0"
