@@ -14,7 +14,26 @@ A whale-girl desktop pet plugin for DeepSeek Harness. She floats over the Web UI
 - 气泡文案中英双语，跟随界面语言 / Bilingual copy (zh/en) following the UI locale
 - 图片以 data URI 内嵌，无外部资源依赖 / The artwork is inlined as a data URI; no external asset fetches
 
-## 安装 / Install
+## 两种形态 / Two forms
+
+| 形态 | 位置 | 说明 |
+|---|---|---|
+| Web 插件 | `client.js` 等 | 浮在 DSH Web 界面里的桌宠，经插件管理器安装 |
+| 桌面应用 | `app/` | 独立的 Electron 桌宠：透明置顶无边框窗口，浮在整个操作系统桌面上 |
+
+### 运行桌面应用 / Run the desktop app
+
+```sh
+cd app
+npm install        # 若 npm 拦截了 electron 的 postinstall，执行 npm install-scripts approve electron && npm rebuild electron
+npm start
+```
+
+- 她会出现在桌面右下角附近，永远置顶、不占任务栏
+- 按住拖拽换位置；点一下摸头；双击暂时隐藏，托盘图标里可“显示”或“退出”
+- 需要图形环境；Wayland 下若透明失效，尝试 `npm start -- --ozone-platform=x11`
+
+
 
 需要已登录 DSH Web 且本机装有 `gh`/`git`。克隆本仓库后，在 DSH 会话里让 Agent 执行：
 
