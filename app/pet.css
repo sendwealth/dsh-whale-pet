@@ -1,6 +1,10 @@
 html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
   -webkit-user-select: none; user-select: none; }
 
+/* Class display rules must never defeat the hidden attribute, or panels
+   like the chat input stay on screen permanently. */
+[hidden] { display: none !important; }
+
 .pet { position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: flex-end; cursor: grab; }
 .pet:active { cursor: grabbing; }
