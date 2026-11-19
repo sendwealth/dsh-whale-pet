@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "generatedBy": "scripts/prepare_sprites.py (Pillow)",
+  "source": "whale_girl_all_sprite_frames_v0.2/whale_girl_sprite_frames",
+  "animations": {
+    "idle": {
+      "labelZh": "待机",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": true,
+      "width": 131,
+      "height": 108,
+      "anchorX": 0.5393,
+      "anchorY": 1.0,
+      "frames": [
+        "idle/idle_001.png",
+        "idle/idle_002.png",
+        "idle/idle_003.png",
+        "idle/idle_004.png",
+        "idle/idle_005.png",
+        "idle/idle_006.png",
+        "idle/idle_007.png",
+        "idle/idle_008.png"
+      ]
+    },
+    "blink": {
+      "labelZh": "眨眼",
+      "frameCount": 4,
+      "fps": 12,
+      "loop": false,
+      "width": 131,
+      "height": 108,
+      "anchorX": 0.5393,
+      "anchorY": 1.0,
+      "frames": [
+        "blink/blink_001.png",
+        "blink/blink_002.png",
+        "blink/blink_003.png",
+        "blink/blink_004.png"
+      ]
+    },
+    "walk": {
+      "labelZh": "走路",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": true,
+      "width": 124,
+      "height": 108,
+      "anchorX": 0.5607,
+      "anchorY": 1.0,
+      "frames": [
+        "walk/walk_001.png",
+        "walk/walk_002.png",
+        "walk/walk_003.png",
+        "walk/walk_004.png",
+        "walk/walk_005.png",
+        "walk/walk_006.png",
+        "walk/walk_007.png",
+        "walk/walk_008.png"
+      ]
+    },
+    "happy": {
+      "labelZh": "开心",
+      "frameCount": 6,
+      "fps": 12,
+      "loop": false,
+      "width": 140,
+      "height": 108,
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "frames": [
+        "happy/happy_001.png",
+        "happy/happy_002.png",
+        "happy/happy_003.png",
+        "happy/happy_004.png",
+        "happy/happy_005.png",
+        "happy/happy_006.png"
+      ]
+    },
+    "surprised": {
+      "labelZh": "惊讶",
+      "frameCount": 6,
+      "fps": 12,
+      "loop": false,
+      "width": 130,
+      "height": 108,
+      "anchorX": 0.5429,
+      "anchorY": 1.0,
+      "frames": [
+        "surprised/surprised_001.png",
+        "surprised/surprised_002.png",
+        "surprised/surprised_003.png",
+        "surprised/surprised_004.png",
+        "surprised/surprised_005.png",
+        "surprised/surprised_006.png"
+      ]
+    },
+    "angry": {
+      "labelZh": "生气",
+      "frameCount": 6,
+      "fps": 12,
+      "loop": false,
+      "width": 129,
+      "height": 108,
+      "anchorX": 0.5464,
+      "anchorY": 1.0,
+      "frames": [
+        "angry/angry_001.png",
+        "angry/angry_002.png",
+        "angry/angry_003.png",
+        "angry/angry_004.png",
+        "angry/angry_005.png",
+        "angry/angry_006.png"
+      ]
+    },
+    "sleep": {
+      "labelZh": "睡觉",
+      "frameCount": 6,
+      "fps": 12,
+      "loop": true,
+      "width": 133,
+      "height": 108,
+      "anchorX": 0.5321,
+      "anchorY": 1.0,
+      "frames": [
+        "sleep/sleep_001.png",
+        "sleep/sleep_002.png",
+        "sleep/sleep_003.png",
+        "sleep/sleep_004.png",
+        "sleep/sleep_005.png",
+        "sleep/sleep_006.png"
+      ]
+    },
+    "eat": {
+      "labelZh": "吃东西",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": true,
+      "width": 128,
+      "height": 108,
+      "anchorX": 0.55,
+      "anchorY": 1.0,
+      "frames": [
+        "eat/eat_001.png",
+        "eat/eat_002.png",
+        "eat/eat_003.png",
+        "eat/eat_004.png",
+        "eat/eat_005.png",
+        "eat/eat_006.png",
+        "eat/eat_007.png",
+        "eat/eat_008.png"
+      ]
+    },
+    "work": {
+      "labelZh": "工作",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": true,
+      "width": 140,
+      "height": 108,
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "frames": [
+        "work/work_001.png",
+        "work/work_002.png",
+        "work/work_003.png",
+        "work/work_004.png",
+        "work/work_005.png",
+        "work/work_006.png",
+        "work/work_007.png",
+        "work/work_008.png"
+      ]
+    },
+    "drag": {
+      "labelZh": "拖动",
+      "frameCount": 4,
+      "fps": 12,
+      "loop": false,
+      "width": 140,
+      "height": 108,
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "frames": [
+        "drag/drag_001.png",
+        "drag/drag_002.png",
+        "drag/drag_003.png",
+        "drag/drag_004.png"
+      ]
+    },
+    "interact": {
+      "labelZh": "互动",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": false,
+      "width": 130,
+      "height": 108,
+      "anchorX": 0.5429,
+      "anchorY": 1.0,
+      "frames": [
+        "interact/interact_001.png",
+        "interact/interact_002.png",
+        "interact/interact_003.png",
+        "interact/interact_004.png",
+        "interact/interact_005.png",
+        "interact/interact_006.png",
+        "interact/interact_007.png",
+        "interact/interact_008.png"
+      ]
+    },
+    "follow": {
+      "labelZh": "跟随",
+      "frameCount": 8,
+      "fps": 12,
+      "loop": true,
+      "width": 140,
+      "height": 108,
+      "anchorX": 0.5,
+      "anchorY": 1.0,
+      "frames": [
+        "follow/follow_001.png",
+        "follow/follow_002.png",
+        "follow/follow_003.png",
+        "follow/follow_004.png",
+        "follow/follow_005.png",
+        "follow/follow_006.png",
+        "follow/follow_007.png",
+        "follow/follow_008.png"
+      ]
+    },
+    "think": {
+      "labelZh": "思考",
+      "frameCount": 6,
+      "fps": 8,
+      "loop": false,
+      "width": 362,
+      "height": 486,
+      "anchorX": 0.5,
+      "anchorY": 0.8447,
+      "frames": [
+        "think/think_001.png",
+        "think/think_002.png",
+        "think/think_003.png",
+        "think/think_004.png",
+        "think/think_005.png",
+        "think/think_006.png"
+      ]
+    }
+  }
+}
