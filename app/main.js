@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerMonit
 const os = require('os');
 const path = require('path');
 const { registerChat } = require('./chat-main');
+const { registerAgentBridge } = require('./agent-bridge');
 
 /** Whether the current display server accepts transparent windows. */
 let win = null;
@@ -63,10 +64,12 @@ function clampToWorkArea() {
 }
 
 let chatApi = null;
+let agentApi = null;
 
 app.whenReady().then(() => {
   createWindow();
   chatApi = registerChat({ app, getWindow: () => win });
+  agentApi = registerAgentBridge({ app, getWindow: () => win, onPhase: updateTrayForPhase });
 
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'whale-girl-small.png')).resize({ width: 32, height: 32 }));
   tray.setToolTip('鲸鱼娘桌宠 / Whale pet');
@@ -84,7 +87,27 @@ app.whenReady().then(() => {
 
 // The renderer owns the settings (persisted in localStorage) and pushes them
 // here; the tray menu mirrors them and its clicks push changes back.
-let settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true };
+let settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true, agent: false };
+
+// The tray tooltip doubles as the agent badge: the phase name travels with
+// the ordinary tooltip text (no extra icon assets needed).
+const PHASE_LABELS = {
+  connecting: '连接中 / connecting',
+  idle: '空闲 / idle',
+  running: '干活中 / working',
+  'waiting-approval': '等你批准 / awaiting approval',
+  'waiting-question': '等你回答 / awaiting answer',
+  error: '出错了 / error',
+  offline: '',
+};
+
+function updateTrayForPhase(payload) {
+  if (tray === null) return;
+  const label = PHASE_LABELS[payload.phase] ?? '';
+  tray.setToolTip(label === ''
+    ? '鲸鱼娘桌宠 / Whale pet'
+    : `鲸鱼娘桌宠 / Whale pet — 助手 ${label}`);
+}
 
 function rebuildTrayMenu() {
   if (tray === null) return;
@@ -118,6 +141,12 @@ function rebuildTrayMenu() {
           checked: settings.chat,
           click: () => { applySetting('chat', !settings.chat); },
         },
+        {
+          label: '连接助手 / Connect agent',
+          type: 'checkbox',
+          checked: settings.agent,
+          click: () => { applySetting('agent', !settings.agent); },
+        },
         { label: '配置 API Key… / Configure API Key…', click: () => { chatApi?.openKeyDialog(); } },
       ],
     },
@@ -131,6 +160,8 @@ function rebuildTrayMenu() {
 function applySetting(key, value) {
   settings[key] = value;
   rebuildTrayMenu();
+  // Toggling the agent owns the runtime subprocess lifecycle.
+  if (key === 'agent') agentApi?.setEnabled(value);
   // The renderer owns the sensor subscriptions; turning them off from the
   // tray is forwarded through the settings push below.
   if (win !== null && !win.isDestroyed()) win.webContents.send('whale:settings-changed', settings);
@@ -139,7 +170,7 @@ function applySetting(key, value) {
 ipcMain.handle('whale:get-settings', () => settings);
 
 ipcMain.handle('whale:set-setting', (_event, key, value) => {
-  if (key !== 'muted' && key !== 'talkativeness' && key !== 'sensors' && key !== 'chat') return;
+  if (key !== 'muted' && key !== 'talkativeness' && key !== 'sensors' && key !== 'chat' && key !== 'agent') return;
   applySetting(key, value);
 });
 

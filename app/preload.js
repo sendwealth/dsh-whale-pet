@@ -51,4 +51,20 @@ contextBridge.exposeInMainWorld('whalePet', {
     ipcRenderer.on('whale:open-chat', handler);
     return () => { ipcRenderer.removeListener('whale:open-chat', handler); };
   },
+  // ---- L4 W2 agent bridge ----
+  // The runtime path/env stay in the main process; only task receipts,
+  // status phases, and display-only approval summaries travel over IPC.
+  agentStartTask: (text) => ipcRenderer.invoke('whale:agent-start-task', { text }),
+  agentApprove: () => ipcRenderer.invoke('whale:agent-approve'),
+  agentReject: () => ipcRenderer.invoke('whale:agent-reject'),
+  onAgentStatus: (listener) => {
+    const handler = (_event, status) => listener(status);
+    ipcRenderer.on('whale:agent-status', handler);
+    return () => { ipcRenderer.removeListener('whale:agent-status', handler); };
+  },
+  onAgentApproval: (listener) => {
+    const handler = (_event, summary) => listener(summary);
+    ipcRenderer.on('whale:agent-approval', handler);
+    return () => { ipcRenderer.removeListener('whale:agent-approval', handler); };
+  },
 });

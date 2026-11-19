@@ -12,7 +12,16 @@
       <div class="bubble-text" id="bubble-text"></div>
       <div class="dots" id="dots" hidden><span></span><span></span><span></span></div>
     </div>
+    <div class="approval-card" id="approval-card" hidden>
+      <div class="approval-title" id="approval-title"></div>
+      <div class="approval-body" id="approval-body"></div>
+      <div class="approval-actions">
+        <button id="approval-allow"></button>
+        <button id="approval-deny"></button>
+      </div>
+    </div>
     <div class="chat-input" id="chat-input" hidden>
+      <span class="mode-tag" id="chat-mode"></span>
       <input id="chat-text" type="text" maxlength="500"
         placeholder="和她说点什么… / Say something…" autocomplete="off">
       <button id="chat-send" title="发送 / Send">➤</button>

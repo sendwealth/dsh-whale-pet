@@ -53,6 +53,24 @@ L3 real conversation (`app/chat-main.js`, `app/memory.js`): she is wired to the 
 - **Memory** (`userData/memory.json`): a rolling window of the last 40 turns; each request injects the system prompt plus the 8 most recent turns. Facts (your name, current project, sleep schedule, likes) are extracted by lightweight regex rules — no LLM extraction — and appended to the prompt as "things you know about your master"; writes are debounced by 1.5 s.
 - **Experience**: sending enters the talk state with a bouncing three-dot "thinking" bubble, the reply types itself out and lingers 10 s, and idle chatter pauses during a conversation. On API failure or a missing key she falls back to local lines (zh/en) and the tray offers "Configure API Key…". The tray "对话 / Chat" checkbox (default on) disables the input and falls back to L1 lines when off.
 
+L4 W2 agent 化身与审批气泡（`app/agent-bridge.js`，实验功能）：托盘"设置 → 连接助手 / Connect agent"开启后，主进程 spawn 一个 `dsh --profile sdk` runtime 子进程（与 W1 PoC `l4-poc/demo.mjs` 相同的连接方式），她从桌宠变成这个 agent 的化身。
+
+- **需要本地 DSH checkout**：默认约定路径 `/home/rowan/Projects/deepseek-harness`（其 `packages/sdk/client/lib` 构建产物与 `apps/cli/lib/bin.js` 是硬依赖），可用 `userData/config.json` 的 `dshCheckout` / `agentDshHome` 覆盖；runtime 路径与环境变量只存在于主进程。
+- **状态化身**：`session.status`（running/idle）直接驱动她的姿态——running 时进入专注"工作"小动作；idle 且刚完成任务时报"任务完成了～"；闲聊气泡在 agent 忙碌时让位。
+- **审批气泡**：server→client 的 `approval/request` / `user-question/ask` 到达时，普通气泡升级为审批卡片（工具名 / 理由 / 问题摘要 + "允许一次 / 拒绝"两个按钮），点击即回填 `allowed-once` / `rejected`（问题则回答首个选项或取消）。绝不自动批准；断开连接时未决审批按取消失败关闭。
+- **输入框模式**：Ctrl+Shift+K 输入行复用——"连接助手"开启时输入派发给 agent（`session/prompt`），输入框旁显示"派任务"标记；未开启则仍是 L3 聊天（"聊天"标记）。
+- **事件过滤与生命周期**：`session.event` 只保留 `turn/end`（错误码如 `MISSING_CREDENTIAL` 会以一次性气泡说明），其余丢弃防内存爆；退出应用先走 SDK 的 EOF→SIGTERM→SIGKILL 拆除阶梯；runtime 崩溃 → 离线气泡 + 托盘 tooltip 提示，不自动重启。
+- **无 key 的诚实行为**：无 `DEEPSEK_API_KEY` 时任务回合真实失败关闭（`MISSING_CREDENTIAL`），气泡如实说明，不伪造成功。离线冒烟 `node app/agent-smoke.js`（纯 Node，不依赖 Electron）覆盖 spawn → initialize → 状态通知 → 任务失败关闭 → shutdown 全链路。
+
+L4 W2 agent avatar & approval bubbles (`app/agent-bridge.js`, experimental): enabling tray "Settings → Connect agent" makes the main process spawn a `dsh --profile sdk` runtime subprocess (the same wiring as the W1 PoC `l4-poc/demo.mjs`), turning her into that agent's avatar.
+
+- **Requires a local DSH checkout**: the convention path is `/home/rowan/Projects/deepseek-harness` (its built `packages/sdk/client/lib` and `apps/cli/lib/bin.js` are hard dependencies); override via `dshCheckout` / `agentDshHome` in `userData/config.json`. Runtime paths and env live only in the main process.
+- **Status avatar**: `session.status` (running/idle) drives her pose directly — running gives her a focused "working" fidget; idle right after a task reports "Task done~"; idle chatter steps aside while the agent is busy.
+- **Approval bubble**: on `approval/request` / `user-question/ask` the bubble upgrades to a decision card (tool name / reason / question summary plus exactly two buttons, "Allow once" / "Deny") that answers with `allowed-once` / `rejected` (questions take the first option, or cancel). Nothing is ever auto-approved; a dropped connection fail-closes pending approvals as cancelled.
+- **Input modes**: the Ctrl+Shift+K line is reused — with the agent connected it dispatches tasks (`session/prompt`) and shows a "task" mode tag; otherwise it stays the L3 persona chat ("chat" tag).
+- **Event filtering & lifecycle**: of `session.event` only `turn/end` is kept (error codes such as `MISSING_CREDENTIAL` surface as a one-shot bubble); everything else is dropped. Quitting walks the SDK's EOF→SIGTERM→SIGKILL dispose ladder first; a crashed runtime means an offline bubble plus a tray tooltip note, with no auto-restart.
+- **Honest keyless behavior**: without `DEEPSEEK_API_KEY` task turns genuinely fail closed (`MISSING_CREDENTIAL`) and the bubble says so — success is never faked. The offline smoke `node app/agent-smoke.js` (plain Node, no Electron) covers spawn → initialize → status notifications → fail-closed task → shutdown.
+
 
 
 需要已登录 DSH Web 且本机装有 `gh`/`git`。克隆本仓库后，在 DSH 会话里让 Agent 执行：

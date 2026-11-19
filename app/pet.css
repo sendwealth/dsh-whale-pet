@@ -104,3 +104,38 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 .bubble-text.typing { border-right: none; }
 .bubble-text.typing::after { content: '▏'; color: #4f6ef7; animation: caret .8s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0 } }
+
+/* ---- L4 W2 agent avatar ---- */
+/* Working pose: a tighter, focused bob with a periodic "typing" nod. */
+.pet.working .figure { animation: work-focus 3.6s ease-in-out infinite; }
+@keyframes work-focus {
+  0%, 100% { transform: translateY(-2px) rotate(-1deg); }
+  45% { transform: translateY(-5px) rotate(-2deg); }
+  72% { transform: translateY(-2px) rotate(-1deg); }
+  78% { transform: translateY(2px) rotate(3deg); }
+  84% { transform: translateY(2px) rotate(-2deg); }
+}
+
+/* Approval card: the bubble upgraded to a decision card with exactly two
+   actions — allow once, or reject. Never auto-approves. */
+.approval-card { position: absolute; bottom: 178px; left: 50%;
+  transform: translateX(-50%); width: 196px; padding: 10px 12px;
+  border-radius: 12px; background: #ffffff; color: #1c2733;
+  border: 1px solid rgba(79,110,247,.55); box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  font: 12px/1.5 system-ui, sans-serif; z-index: 4; animation: pop .18s ease-out; }
+.approval-title { font-weight: 700; color: #4f6ef7; margin-bottom: 4px; }
+.approval-body { white-space: pre-line; max-height: 96px; overflow: hidden;
+  margin-bottom: 8px; word-break: break-word; }
+.approval-actions { display: flex; gap: 6px; }
+.approval-actions button { flex: 1; border: none; border-radius: 8px;
+  padding: 5px 0; font: 12px/1.4 system-ui, sans-serif; cursor: pointer; }
+#approval-allow { background: #4f6ef7; color: #fff; }
+#approval-allow:hover { background: #3d5bf5; }
+#approval-deny { background: #eef1fd; color: #4f6ef7; }
+#approval-deny:hover { background: #dde3fc; }
+
+/* Input mode tag: chat with her vs. dispatch a task to the agent. */
+.mode-tag { flex: 0 0 auto; align-self: center; padding: 3px 6px;
+  border-radius: 8px; background: #eef1fd; color: #4f6ef7;
+  font: 11px/1.2 system-ui, sans-serif; white-space: nowrap; }
+.mode-tag.task { background: #e6f7ee; color: #1e9e63; }

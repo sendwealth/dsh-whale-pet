@@ -176,12 +176,15 @@ function pickCtx(list) {
 }
 
 let bubbleTimer = 0;
+// Set while an approval card is up; ordinary bubbles step aside.
+let approvalUp = false;
 /**
  * Show a bubble for `ms` (default 5.2 s; chat replies stay 10 s).
  * @param {string} text
  * @param {number} [ms]
  */
 function say(text, ms = 5200) {
+  if (approvalUp) return;
   bubbleText.textContent = text;
   bubbleText.classList.remove('typing');
   bubble.hidden = false;
@@ -264,7 +267,7 @@ function zoneFor(y) {
 
 const SETTINGS_KEY = 'whale-pet-settings';
 const TALK_INTERVALS = { talkative: 9000, normal: 18000, quiet: 45000 };
-const settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true };
+const settings = { muted: false, talkativeness: 'normal', sensors: true, chat: true, agent: false };
 try { Object.assign(settings, JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (err) { /* fall back to defaults on corrupt storage */ }
 if (!(settings.talkativeness in TALK_INTERVALS)) settings.talkativeness = 'normal';
 
@@ -283,6 +286,7 @@ window.whalePet.onSettingsChanged((remote) => {
   Object.assign(settings, remote);
   saveSettings();
   Sensors.setEnabled(settings.sensors !== false);
+  updateModeTag();
   scheduleIdleChatter();
 });
 
@@ -303,7 +307,7 @@ function scheduleIdleChatter() {
   idleTimer = window.setTimeout(idleChatter, TALK_INTERVALS[settings.talkativeness]);
 }
 function idleChatter() {
-  if (fullscreenHidden || chatting || !bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
+  if (fullscreenHidden || chatting || agentBusy() || !bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
     scheduleIdleChatter();
     return;
   }
@@ -487,7 +491,8 @@ function closeChatInput() {
 
 function openChatInput() {
   if (fullscreenHidden || machine.current === 'sleep') return;
-  if (settings.chat === false) {
+  // Agent mode reuses the input even when persona chat is off.
+  if (settings.agent === false && settings.chat === false) {
     machine.request('talk', { force: true });
     say(chatDict.off);
     return;
@@ -505,6 +510,19 @@ async function sendChat() {
   chatText.value = '';
   lastInteract = Date.now();
   machine.request('talk', { force: true });
+  // Agent mode (L4 W2): the input dispatches a task to the DSH runtime
+  // instead of the persona chat; her later phase changes tell the story.
+  if (settings.agent) {
+    const result = await window.whalePet.agentStartTask(text);
+    if (result && result.ok) {
+      say(dictLang === 'zh' ? '收到任务！我去忙啦～' : 'Got it! On it~', 5000);
+    } else {
+      say(dictLang === 'zh' ? '（助手还没连上……托盘“设置 → 连接助手”里开启哦）' : '(The agent is not connected—enable it under tray Settings.)', 8000);
+      chatting = false;
+      scheduleIdleChatter();
+    }
+    return;
+  }
   showThinking();
   const seq = ++chatSeq;
   const result = await window.whalePet.chat(text, dictLang);
@@ -541,4 +559,122 @@ window.whalePet.onKeyConfigured(() => {
   if (!chatInput.hidden) return;
   machine.request('talk', { force: true });
   say(dictLang === 'zh' ? '（海流接通了！现在可以好好聊天啦～）' : '(The current is connected! Now we can really chat~)', 6000);
+});
+
+// ---- L4 W2: agent avatar + approval bubble ----------------------------------
+
+const approvalCard = document.getElementById('approval-card');
+const approvalTitle = document.getElementById('approval-title');
+const approvalBody = document.getElementById('approval-body');
+const approvalAllow = document.getElementById('approval-allow');
+const approvalDeny = document.getElementById('approval-deny');
+const modeTag = document.getElementById('chat-mode');
+
+const AGENT_DICT = {
+  zh: {
+    modeChat: '聊天', modeTask: '派任务',
+    approveTitle: '需要你批准', questionTitle: '她有问题问你',
+    allow: '允许一次', deny: '拒绝',
+    done: '任务完成了～',
+    offline: '（和助手的连接断开了……托盘里可以重新开启）',
+    crashed: '（助手进程退出了……需要的话从托盘重新连接哦）',
+    errorPrefix: '（助手出错了：',
+    missingKey: '（任务的深海海流没接通——runtime 缺少 DEEPSEEK_API_KEY，没法真的干活哦）',
+  },
+  en: {
+    modeChat: 'chat', modeTask: 'task',
+    approveTitle: 'Approval needed', questionTitle: 'She has a question',
+    allow: 'Allow once', deny: 'Deny',
+    done: 'Task done~',
+    offline: '(Lost the connection to the agent… reconnect from the tray.)',
+    crashed: '(The agent runtime exited… reconnect from the tray if needed.)',
+    errorPrefix: '(Agent error: ',
+    missingKey: '(The deep-sea current is not connected—the runtime has no DEEPSEEK_API_KEY, so it cannot really work.)',
+  },
+};
+const ad = AGENT_DICT[dictLang];
+
+let agentPhase = 'offline';
+const agentNoticed = { offline: false, crashed: false, error: false };
+
+function agentBusy() {
+  return agentPhase === 'connecting' || agentPhase === 'running'
+    || agentPhase === 'waiting-approval' || agentPhase === 'waiting-question';
+}
+
+function updateModeTag() {
+  modeTag.textContent = settings.agent ? ad.modeTask : ad.modeChat;
+  modeTag.classList.toggle('task', settings.agent === true);
+  chatText.placeholder = settings.agent
+    ? (dictLang === 'zh' ? '给她派个任务…' : 'Give her a task…')
+    : '和她说点什么… / Say something…';
+}
+updateModeTag();
+
+function hideBubbleNow() {
+  window.clearTimeout(bubbleTimer);
+  stopTypewriter();
+  dots.hidden = true;
+  bubble.hidden = true;
+}
+
+function showApprovalCard(summary) {
+  hideBubbleNow();
+  approvalTitle.textContent = summary.kind === 'question' ? ad.questionTitle : ad.approveTitle;
+  const lines = [];
+  if (summary.kind !== 'question' && summary.toolName) lines.push(`🔧 ${summary.toolName}`);
+  if (summary.reason) lines.push(summary.kind === 'question' ? `💬 ${summary.reason}` : summary.reason);
+  if (summary.question) lines.push(`❓ ${summary.question}`);
+  if (lines.length === 0) lines.push(summary.kind === 'question' ? '…' : '…');
+  approvalBody.textContent = lines.join('\n');
+  approvalUp = true;
+  approvalCard.hidden = false;
+}
+
+function hideApprovalCard() {
+  approvalCard.hidden = true;
+  approvalUp = false;
+}
+
+approvalAllow.addEventListener('click', async () => {
+  hideApprovalCard();
+  await window.whalePet.agentApprove();
+});
+approvalDeny.addEventListener('click', async () => {
+  hideApprovalCard();
+  await window.whalePet.agentReject();
+});
+
+// Summary pushes arrive next to (or before) the waiting-* phase flip; the
+// card is the single source of truth for what is pending.
+window.whalePet.onAgentApproval((summary) => { showApprovalCard(summary); });
+
+window.whalePet.onAgentStatus((status) => {
+  const prev = agentPhase;
+  agentPhase = status.phase;
+  // Working pose only while the agent is actually running.
+  pet.classList.toggle('working', status.phase === 'running');
+  if (status.phase === 'waiting-approval' || status.phase === 'waiting-question') {
+    hideBubbleNow();
+    machine.request('curious', { force: true });
+  } else if ((prev === 'waiting-approval' || prev === 'waiting-question')
+    && status.phase !== 'waiting-approval' && status.phase !== 'waiting-question') {
+    hideApprovalCard();
+  }
+  if (status.done) {
+    machine.request('talk', { force: true });
+    say(ad.done, 8000);
+  }
+  if (status.error) {
+    const line = status.error.code === 'MISSING_CREDENTIAL'
+      ? ad.missingKey
+      : `${ad.errorPrefix}${status.error.code})`;
+    say(line, 10000);
+  }
+  // Offline/error/crash get one bubble each, never a stream of them.
+  if (status.phase === 'offline' && !agentNoticed.offline) {
+    agentNoticed.offline = true;
+    agentNoticed.crashed = false;
+    if (prev !== 'offline') say(status.crashed ? ad.crashed : ad.offline, 8000);
+  }
 });
