@@ -12,7 +12,10 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
   width: max-content; max-width: 200px; transform: translateX(-50%); z-index: 2; }
 .bubble-text { padding: 8px 12px; border-radius: 12px; animation: pop .18s ease-out;
   background: #ffffff; color: #1c2733; border: 1px solid rgba(0,0,0,.2);
-  box-shadow: 0 4px 14px rgba(0,0,0,.18); font: 12px/1.5 system-ui, sans-serif; }
+  box-shadow: 0 4px 14px rgba(0,0,0,.18); font: 12px/1.5 system-ui, sans-serif;
+  transition: opacity .8s ease; }
+/* While asleep her words drift away with her. */
+.pet.sleep .bubble-text { opacity: .25; }
 .bubble-text::after { content: ''; position: absolute; left: 24px; bottom: -6px;
   width: 10px; height: 10px; border-right: 1px solid rgba(0,0,0,.2);
   border-bottom: 1px solid rgba(0,0,0,.2); transform: rotate(45deg); background: #ffffff; }
@@ -20,11 +23,33 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 
 .figure { position: relative; animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 85%; }
 .pet.happy .figure { animation: happy .5s ease-in-out 3; }
+.pet.angry .figure { animation: angry .45s ease-in-out 4; }
+.pet.shy .figure { animation: shy .8s ease-in-out 3; }
+.pet.curious .figure { animation: curious 2.4s ease-in-out 1; }
+.pet.sleep .figure { animation: bob 7s ease-in-out infinite; }
 .figure img { display: block; width: 130px; height: auto;
-  filter: drop-shadow(0 6px 10px rgba(40,60,140,.28)); }
+  filter: drop-shadow(0 6px 10px rgba(40,60,140,.28)); transition: filter 1.2s ease; }
+.pet.sleep .figure img { filter: grayscale(.85) brightness(.75)
+  drop-shadow(0 6px 10px rgba(20,30,80,.35)); }
 @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
 @keyframes happy { 0%,100% { transform: translateY(0) rotate(0) }
   25% { transform: translateY(-14px) rotate(-7deg) } 75% { transform: translateY(-4px) rotate(7deg) } }
+@keyframes angry { 0%,100% { transform: translateX(0) }
+  20% { transform: translateX(-5px) rotate(-3deg) } 60% { transform: translateX(5px) rotate(3deg) } }
+@keyframes shy { 0%,100% { transform: rotate(0); filter: none }
+  50% { transform: rotate(-6deg) translateY(2px) } }
+@keyframes curious { 0%,100% { transform: rotate(0) }
+  30% { transform: rotate(4deg) translateY(-6px) } 60% { transform: rotate(-2deg) } }
+
+/* Zzz, pure CSS: three letters float up beside her head while she sleeps. */
+.pet.sleep .figure::after { content: 'Z'; position: absolute; right: -26px; top: 6px;
+  font: bold 14px/1 system-ui, sans-serif; color: #8fa8ff; opacity: 0;
+  animation: zzz 3.2s ease-in infinite; }
+.pet.sleep .figure::before { content: 'z'; position: absolute; right: -38px; top: -2px;
+  font: bold 11px/1 system-ui, sans-serif; color: #b3c6ff; opacity: 0;
+  animation: zzz 3.2s ease-in .9s infinite; }
+@keyframes zzz { 0% { opacity: 0; translate: 0 6px } 30% { opacity: .9 }
+  100% { opacity: 0; translate: 8px -14px } }
 
 .sparkle { position: absolute; width: 20px; height: 20px; opacity: 0; }
 .sparkle.s1 { left: -12px; top: 10px; }

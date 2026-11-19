@@ -33,6 +33,10 @@ npm start
 - 按住拖拽换位置；点一下摸头；双击暂时隐藏，托盘图标里可“显示”或“退出”
 - 需要图形环境；Wayland 下若透明失效，尝试 `npm start -- --ozone-platform=x11`
 
+L1 生命感：显式状态机（idle/sleep/happy/angry/curious/shy/talk，见 `app/pet-states.js`），深夜 23:00–07:00 自动入睡（画面变灰 + 纯 CSS Zzz，点击会被吵醒小生气后继续睡），早晨首次交互有晨间问候；摸头/摸脸/戳肚子按点击位置三区判定，各有独立台词池；台词按时段（morning/afternoon/evening/night）、long-idle、weekday/weekend 条件过滤；托盘子菜单支持静音与话痨程度（话痨/正常/安静），设置经 localStorage 持久化并双向同步。
+
+L1 liveliness: an explicit state machine (idle/sleep/happy/angry/curious/shy/talk, see `app/pet-states.js`); she sleeps 23:00–07:00 (desaturated figure + pure-CSS Zzz; clicking wakes her briefly, then she dozes off again) and greets you on the first morning interaction. Touch zones split by click position — head pats (happy), face (shy), belly pokes (angry) — each with its own bilingual line pools, and idle lines are filtered by context tags (time slot, long-idle, weekday/weekend). Tray submenus toggle chatter mute and talkativeness (talkative/normal/quiet), persisted in localStorage and synced both ways over IPC.
+
 
 
 需要已登录 DSH Web 且本机装有 `gh`/`git`。克隆本仓库后，在 DSH 会话里让 Agent 执行：

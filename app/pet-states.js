@@ -1,0 +1,49 @@
+'use strict';
+
+// Explicit state machine for the pet. Each state owns its CSS class,
+// minimum hold time, and priority; transitions are arbitrated here so
+// pet.js only reports events, speech, and timers.
+const WhaleStates = (() => {
+  // priority: while a state is still inside its minDur window, only a
+  // strictly higher-priority state may interrupt it (or a forced switch).
+  const STATES = {
+    idle: { css: null, minDur: 4000, priority: 0 },
+    talk: { css: null, minDur: 3000, priority: 1 },
+    curious: { css: 'curious', minDur: 3200, priority: 2 },
+    shy: { css: 'shy', minDur: 2600, priority: 3 },
+    happy: { css: 'happy', minDur: 1600, priority: 3 },
+    angry: { css: 'angry', minDur: 2400, priority: 4 },
+    sleep: { css: 'sleep', minDur: 8000, priority: 5 },
+  };
+  const CSS_CLASSES = Object.values(STATES).map((s) => s.css).filter((c) => c !== null);
+
+  function create(hooks) {
+    let current = 'idle';
+    let enteredAt = Date.now();
+
+    function enter(name) {
+      const prev = current;
+      current = name;
+      enteredAt = Date.now();
+      if (hooks.onExit) hooks.onExit(prev);
+      if (hooks.onEnter) hooks.onEnter(name, prev);
+    }
+
+    return {
+      get current() { return current; },
+      get heldFor() { return Date.now() - enteredAt; },
+      minDur(name) { return STATES[name].minDur; },
+      request(name, opts) {
+        if (!(name in STATES) || name === current) return false;
+        const force = Boolean(opts && opts.force);
+        if (!force) {
+          if (Date.now() - enteredAt < STATES[current].minDur) return false;
+        }
+        enter(name);
+        return true;
+      },
+    };
+  }
+
+  return { create, STATES, CSS_CLASSES };
+})();

@@ -3,48 +3,123 @@
 const bubble = document.getElementById('bubble');
 const bubbleText = document.getElementById('bubble-text');
 const pet = document.getElementById('pet');
+const petImg = document.getElementById('pet-img');
 
+// Condition-tagged lines. `when` is a list of context tags (time slot,
+// long-idle, weekday/weekend); entries without `when` fit any context.
 const DICTS = {
   zh: {
     greet: '嗨～我是鲸鱼娘，已经浮在桌面上了哦！',
-    idle: [
-      '呼——唔……主人在忙什么呢？',
-      '我刚刚在深海里打了个盹～',
-      '工作累了吗？记得休息一下眼睛哦。',
-      '今天的风好适合游泳呀～',
-      '有什么想让我陪你的吗？',
+    morningGreet: [
+      '早上好～昨晚在桌面睡得可香了，今天也一起加油吧！',
+      '唔哇……早安！海面的阳光好刺眼呀～',
     ],
-    pat: [
-      '呀！被摸头了……好开心～',
-      '噗噜噗噜～再摸一下嘛！',
-      '你、你别乱摸啦……不过好舒服～',
-      '嘿嘿，我最喜欢你啦！',
+    woken: [
+      '唔……Zzz……人家在睡觉啦……',
+      '别吵嘛……再吵我要生气了哦……',
     ],
     drag: '哇——飞起来了！放在哪里好呢？',
     double: '下次想找我，就从托盘图标里点出来哦～',
+    idle: [
+      { t: '呼——唔……主人在忙什么呢？' },
+      { t: '我刚刚在深海里打了个盹～' },
+      { t: '工作累了吗？记得休息一下眼睛哦。' },
+      { t: '有什么想让我陪你的吗？' },
+      { t: '今天的风好适合游泳呀～', when: ['morning', 'afternoon'] },
+      { t: '午后的阳光晒得尾巴暖洋洋的～', when: ['afternoon'] },
+      { t: '晚上的桌面好安静，适合发呆……', when: ['evening'] },
+      { t: '夜深了，主人的屏幕光像月光一样……', when: ['night'] },
+      { t: '主人是不是把我忘了……戳我一下嘛。', when: ['long-idle'] },
+      { t: '连鲸鱼都知道，工作日要好好干活哦。', when: ['weekday'] },
+      { t: '周末就该浮在海面上什么都不想～', when: ['weekend'] },
+    ],
+    head: [
+      '呀！被摸头了……好开心～',
+      '噗噜噗噜～再摸一下嘛！',
+      '嘿嘿，我最喜欢你啦！',
+    ],
+    face: [
+      '你、你盯着人家的脸看什么啦……',
+      '呜……脸被摸红了啦……',
+      '别、别捏脸颊呀……好害羞……',
+    ],
+    belly: [
+      '噗咚！不许戳肚子！',
+      '再戳我要喷水了哦！',
+      '肚子是鲸鱼娘的逆鳞！生气了！',
+    ],
   },
   en: {
     greet: 'Hi! I am the whale girl, floating on your desktop now!',
-    idle: [
-      'Hmm… what are you working on?',
-      'I just took a nap in the deep sea.',
-      'Tired of working? Rest your eyes for a bit.',
-      'Today the wind is perfect for swimming.',
-      'Want some company while you work?',
+    morningGreet: [
+      'Good morning~ I slept so well on your desktop. Let\'s do our best today!',
+      'Mmwa… morning! The sunlight on the sea surface is so bright~',
     ],
-    pat: [
-      'Eek! Head pats… I love them!',
-      'Blub blub~ one more pat, please!',
-      'Hey, no touching… okay, maybe a little more.',
-      'Hehe, you are my favorite!',
+    woken: [
+      'Mmh… Zzz… I was sleeping…',
+      'Stop it… keep poking and I will get grumpy…',
     ],
     drag: 'Wah—I can fly! Where should I sit?',
     double: 'To bring me back later, click the tray icon.',
+    idle: [
+      { t: 'Hmm… what are you working on?' },
+      { t: 'I just took a nap in the deep sea.' },
+      { t: 'Tired of working? Rest your eyes for a bit.' },
+      { t: 'Want some company while you work?' },
+      { t: 'Today the wind is perfect for swimming.', when: ['morning', 'afternoon'] },
+      { t: 'The afternoon sun makes my tail all warm~', when: ['afternoon'] },
+      { t: 'The desktop is so quiet at night, nice for daydreaming…', when: ['evening'] },
+      { t: 'It is late… your screen glows like moonlight…', when: ['night'] },
+      { t: 'Did you forget about me…? Poke me!', when: ['long-idle'] },
+      { t: 'Even whales know: work hard on weekdays.', when: ['weekday'] },
+      { t: 'Weekends are for floating on the sea, thinking of nothing~', when: ['weekend'] },
+    ],
+    head: [
+      'Eek! Head pats… I love them!',
+      'Blub blub~ one more pat, please!',
+      'Hehe, you are my favorite!',
+    ],
+    face: [
+      'W-why are you staring at my face…',
+      'Aww… you made my cheeks red…',
+      'D-do not pinch my cheeks… so embarrassing…',
+    ],
+    belly: [
+      'Boing! No poking my belly!',
+      'Poke me again and I will spout water!',
+      'The belly is a whale girl\'s weak spot! Hmph!',
+    ],
   },
 };
 const dict = (navigator.language ?? 'en').startsWith('zh') ? DICTS.zh : DICTS.en;
 
 function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+
+const LONG_IDLE_MS = 5 * 60 * 1000;
+let lastInteract = Date.now();
+
+function contextTags() {
+  const now = new Date();
+  const h = now.getHours();
+  let slot;
+  if (h >= 5 && h < 11) slot = 'morning';
+  else if (h < 18) slot = 'afternoon';
+  else if (h < 23) slot = 'evening';
+  else slot = 'night';
+  const tags = [slot, now.getDay() === 0 || now.getDay() === 6 ? 'weekend' : 'weekday'];
+  if (Date.now() - lastInteract > LONG_IDLE_MS) tags.push('long-idle');
+  return tags;
+}
+
+let lastLine = '';
+function pickCtx(list) {
+  const tags = contextTags();
+  const fit = list.filter((e) => e.when === undefined || e.when.some((w) => tags.includes(w)));
+  const pool = (fit.length > 0 ? fit : list.filter((e) => e.when === undefined)).filter((e) => e.t !== lastLine);
+  const chosen = pick(pool.length > 0 ? pool : list);
+  lastLine = chosen.t;
+  return chosen.t;
+}
 
 let bubbleTimer = 0;
 function say(text) {
@@ -54,11 +129,120 @@ function say(text) {
   bubbleTimer = window.setTimeout(() => { bubble.hidden = true; }, 5200);
 }
 
-say(dict.greet);
+// ---- State machine wiring -------------------------------------------------
+
+const machine = WhaleStates.create({
+  onEnter(name) {
+    const css = WhaleStates.STATES[name].css;
+    if (css !== null) pet.classList.add(css);
+  },
+  onExit(name) {
+    const css = WhaleStates.STATES[name].css;
+    if (css !== null) pet.classList.remove(css);
+  },
+});
+
+function isNight() {
+  const h = new Date().getHours();
+  return h >= 23 || h < 7;
+}
+
+// Morning greeting fires on the first interaction of the morning; remember
+// the greeted date so a relaunch does not repeat it.
+let morningGreetPending = false;
+function refreshMorningPending() {
+  const h = new Date().getHours();
+  const today = new Date().toDateString();
+  const greeted = window.localStorage.getItem('whale-morning-date');
+  if (h >= 7 && h < 11 && greeted !== today) morningGreetPending = true;
+}
+refreshMorningPending();
+function markMorningGreeted() {
+  morningGreetPending = false;
+  window.localStorage.setItem('whale-morning-date', new Date().toDateString());
+}
+
+// Sleep rhythm: fall asleep late at night, wake up after 07:00.
 window.setInterval(() => {
-  if (!bubble.hidden || pet.classList.contains('dragging')) return;
-  say(pick(dict.idle));
-}, 18000);
+  if (isNight()) {
+    if (machine.current !== 'sleep') {
+      window.clearTimeout(bubbleTimer);
+      bubble.hidden = true;
+      machine.request('sleep', { force: true });
+    }
+  } else if (machine.current === 'sleep') {
+    machine.request('idle', { force: true });
+    refreshMorningPending();
+  }
+}, 15000);
+if (isNight()) machine.request('sleep', { force: true });
+
+let wakeTimer = 0;
+// Interactions wake her briefly at night, then she goes back to sleep.
+function wakeFromSleep() {
+  window.clearTimeout(wakeTimer);
+  machine.request('angry', { force: true });
+  say(pick(dict.woken));
+  wakeTimer = window.setTimeout(() => {
+    window.clearTimeout(bubbleTimer);
+    bubble.hidden = true;
+    machine.request('sleep', { force: true });
+  }, machine.minDur('angry'));
+}
+
+function zoneFor(y) {
+  const rect = petImg.getBoundingClientRect();
+  const ratio = (y - rect.top) / rect.height;
+  if (ratio < 1 / 3) return { state: 'happy', lines: dict.head };
+  if (ratio < 2 / 3) return { state: 'shy', lines: dict.face };
+  return { state: 'angry', lines: dict.belly };
+}
+
+// ---- Settings (renderer-owned, synced with the tray via IPC) --------------
+
+const SETTINGS_KEY = 'whale-pet-settings';
+const TALK_INTERVALS = { talkative: 9000, normal: 18000, quiet: 45000 };
+const settings = { muted: false, talkativeness: 'normal' };
+try { Object.assign(settings, JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (err) { /* fall back to defaults on corrupt storage */ }
+if (!(settings.talkativeness in TALK_INTERVALS)) settings.talkativeness = 'normal';
+
+function saveSettings() {
+  window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+function pushSetting(key, value) {
+  settings[key] = value;
+  saveSettings();
+  window.whalePet.setSetting(key, value);
+}
+
+// Push the persisted settings once so the tray checkmarks match.
+for (const key of Object.keys(settings)) window.whalePet.setSetting(key, settings[key]);
+window.whalePet.onSettingsChanged((remote) => {
+  Object.assign(settings, remote);
+  saveSettings();
+  scheduleIdleChatter();
+});
+
+// ---- Idle chatter ----------------------------------------------------------
+
+let idleTimer = 0;
+function scheduleIdleChatter() {
+  window.clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(idleChatter, TALK_INTERVALS[settings.talkativeness]);
+}
+function idleChatter() {
+  if (!bubble.hidden || machine.current === 'sleep' || pet.classList.contains('dragging')) {
+    scheduleIdleChatter();
+    return;
+  }
+  if (!settings.muted) {
+    say(pickCtx(dict.idle));
+    machine.request('talk');
+  }
+  scheduleIdleChatter();
+}
+
+// ---- Pointer interactions --------------------------------------------------
 
 // The renderer only reports drag start and end; the main process tracks
 // the real OS cursor, so window-relative coordinates never fight it.
@@ -83,7 +267,8 @@ pet.addEventListener('pointermove', (event) => {
   say(dict.drag);
   window.whalePet.beginDrag();
 });
-pet.addEventListener('pointerup', async () => {
+pet.addEventListener('pointerup', async (event) => {
+  lastInteract = Date.now();
   if (dragging) {
     dragging = false;
     pet.classList.remove('dragging');
@@ -91,9 +276,24 @@ pet.addEventListener('pointerup', async () => {
     return;
   }
   press = null;
-  pet.classList.add('happy');
-  say(pick(dict.pat));
-  window.setTimeout(() => pet.classList.remove('happy'), 1600);
+  if (machine.current === 'sleep') { wakeFromSleep(); return; }
+  if (morningGreetPending) {
+    markMorningGreeted();
+    machine.request('talk', { force: true });
+    say(pick(dict.morningGreet));
+    return;
+  }
+  const zone = zoneFor(event.clientY);
+  machine.request(zone.state);
+  say(pick(zone.lines));
+});
+pet.addEventListener('pointercancel', async () => {
+  if (dragging) {
+    dragging = false;
+    pet.classList.remove('dragging');
+    await window.whalePet.endDrag();
+  }
+  press = null;
 });
 
 // Double-click hides her; the tray icon brings her back.
@@ -101,3 +301,6 @@ pet.addEventListener('dblclick', () => {
   say(dict.double);
   window.setTimeout(() => { window.whalePet.hide(); }, 1200);
 });
+
+say(dict.greet);
+scheduleIdleChatter();

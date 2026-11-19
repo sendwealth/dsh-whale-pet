@@ -61,11 +61,7 @@ app.whenReady().then(() => {
 
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'whale-girl-small.png')).resize({ width: 32, height: 32 }));
   tray.setToolTip('鲸鱼娘桌宠 / Whale pet');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 / Show', click: () => { win?.show(); } },
-    { type: 'separator' },
-    { label: '退出 / Quit', click: () => { quitRequested = true; app.quit(); } },
-  ]));
+  rebuildTrayMenu();
 
   // Closing the pet window only hides her; the tray stays. Quit from the tray.
   win.on('close', (event) => {
@@ -75,6 +71,51 @@ app.whenReady().then(() => {
     }
   });
   app.on('window-all-closed', () => { /* keep running in the tray */ });
+});
+
+// The renderer owns the settings (persisted in localStorage) and pushes them
+// here; the tray menu mirrors them and its clicks push changes back.
+let settings = { muted: false, talkativeness: 'normal' };
+
+function rebuildTrayMenu() {
+  if (tray === null) return;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '设置 / Settings',
+      submenu: [
+        {
+          label: '静音闲聊 / Mute chatter',
+          type: 'checkbox',
+          checked: settings.muted,
+          click: () => { applySetting('muted', !settings.muted); },
+        },
+        {
+          label: '话痨程度 / Talkativeness',
+          submenu: [
+            { label: '话痨 / Talkative', type: 'radio', checked: settings.talkativeness === 'talkative', click: () => { applySetting('talkativeness', 'talkative'); } },
+            { label: '正常 / Normal', type: 'radio', checked: settings.talkativeness === 'normal', click: () => { applySetting('talkativeness', 'normal'); } },
+            { label: '安静 / Quiet', type: 'radio', checked: settings.talkativeness === 'quiet', click: () => { applySetting('talkativeness', 'quiet'); } },
+          ],
+        },
+      ],
+    },
+    { label: '显示 / Show', click: () => { win?.show(); } },
+    { type: 'separator' },
+    { label: '退出 / Quit', click: () => { quitRequested = true; app.quit(); } },
+  ]));
+}
+
+function applySetting(key, value) {
+  settings[key] = value;
+  rebuildTrayMenu();
+  if (win !== null && !win.isDestroyed()) win.webContents.send('whale:settings-changed', settings);
+}
+
+ipcMain.handle('whale:get-settings', () => settings);
+
+ipcMain.handle('whale:set-setting', (_event, key, value) => {
+  if (key !== 'muted' && key !== 'talkativeness') return;
+  applySetting(key, value);
 });
 
 // Dragging runs in the main process: renderer-side coordinates are
