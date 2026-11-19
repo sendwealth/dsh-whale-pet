@@ -32,7 +32,7 @@ function runElectronSmoke() {
   });
 }
 
-(SKIP ? test.skip : test)('DOM smoke: [hidden] hides chat-input/bubble/dots/approval-card in the real page', async () => {
+(SKIP ? test.skip : test)('DOM smoke: hidden panels, sprite frame switching, sleep without filter', async () => {
   const { code, signal, stdout, stderr } = await runElectronSmoke();
   const line = stdout.split('\n').find((l) => l.startsWith('WHALE_DOM_SMOKE '));
   assert.ok(line, `no WHALE_DOM_SMOKE line in output; exit=${code}/${signal} stderr=${stderr.slice(0, 2000)}`);

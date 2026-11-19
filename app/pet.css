@@ -27,25 +27,16 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
   border-bottom: 1px solid rgba(0,0,0,.2); transform: rotate(45deg); background: #ffffff; }
 @keyframes pop { from { opacity: 0; translate: 0 6px; scale: .9; } }
 
-.figure { position: relative; animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 85%; }
-.pet.happy .figure { animation: happy .5s ease-in-out 3; }
-.pet.angry .figure { animation: angry .45s ease-in-out 4; }
-.pet.shy .figure { animation: shy .8s ease-in-out 3; }
-.pet.curious .figure { animation: curious 2.4s ease-in-out 1; }
-.pet.sleep .figure { animation: bob 7s ease-in-out infinite; }
-.figure img { display: block; width: 130px; height: auto;
+/* Sprite frames take over the figure once the manifest preload finishes
+   (.sprites-ready); until then the CSS bob on the static image is the
+   fallback so the pet never flashes blank. The retired happy/angry/shy/
+   curious/sleep figure keyframes and the sleep grayscale filter used to
+   live here — expressions now come from the sprite animations. */
+.figure { position: relative; transform-origin: 50% 85%; }
+.pet:not(.sprites-ready) .figure { animation: bob 3.4s ease-in-out infinite; }
+.figure img { display: block; width: 130px; height: auto; image-rendering: auto;
   filter: drop-shadow(0 6px 10px rgba(40,60,140,.28)); transition: filter 1.2s ease; }
-.pet.sleep .figure img { filter: grayscale(.85) brightness(.75)
-  drop-shadow(0 6px 10px rgba(20,30,80,.35)); }
 @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
-@keyframes happy { 0%,100% { transform: translateY(0) rotate(0) }
-  25% { transform: translateY(-14px) rotate(-7deg) } 75% { transform: translateY(-4px) rotate(7deg) } }
-@keyframes angry { 0%,100% { transform: translateX(0) }
-  20% { transform: translateX(-5px) rotate(-3deg) } 60% { transform: translateX(5px) rotate(3deg) } }
-@keyframes shy { 0%,100% { transform: rotate(0); filter: none }
-  50% { transform: rotate(-6deg) translateY(2px) } }
-@keyframes curious { 0%,100% { transform: rotate(0) }
-  30% { transform: rotate(4deg) translateY(-6px) } 60% { transform: rotate(-2deg) } }
 
 /* Zzz, pure CSS: three letters float up beside her head while she sleeps. */
 .pet.sleep .figure::after { content: 'Z'; position: absolute; right: -26px; top: 6px;
@@ -77,8 +68,9 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 @keyframes doze { 0%,100% { transform: translateY(0) rotate(0) }
   50% { transform: translateY(8px) rotate(5deg) } }
 
-/* Sustained CPU load: a fretful little shiver. */
-.pet.worried .figure { animation: worried .3s ease-in-out infinite; }
+/* Sustained CPU load: the work sprite covers the expression; the fretful
+   shiver only plays before sprites are ready. */
+.pet:not(.sprites-ready).worried .figure { animation: worried .3s ease-in-out infinite; }
 @keyframes worried { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-2px) rotate(1.5deg) } }
 
 /* Fullscreen app owns the display: fade out and ignore input. */
@@ -112,8 +104,9 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
 @keyframes caret { 50% { opacity: 0 } }
 
 /* ---- L4 W2 agent avatar ---- */
-/* Working pose: a tighter, focused bob with a periodic "typing" nod. */
-.pet.working .figure { animation: work-focus 3.6s ease-in-out infinite; }
+/* Working pose: before sprites are ready, a tighter focused bob; with
+   sprites the think/work animations carry the expression. */
+.pet:not(.sprites-ready).working .figure { animation: work-focus 3.6s ease-in-out infinite; }
 @keyframes work-focus {
   0%, 100% { transform: translateY(-2px) rotate(-1deg); }
   45% { transform: translateY(-5px) rotate(-2deg); }

@@ -204,12 +204,159 @@ const machine = WhaleStates.create({
     if (css !== null) pet.classList.add(css);
     // Any real state change ends a sensor-induced doze/lean/worry pose.
     pet.classList.remove('doze', 'leaning', 'worried');
+    refreshAnim();
   },
   onExit(name) {
     const css = WhaleStates.STATES[name].css;
     if (css !== null) pet.classList.remove(css);
   },
 });
+
+// ---- Sprite frame animation (docs/sprite-integration-plan.md) --------------
+
+const APP_START_TIME = Date.now();
+const SPRITE_TARGET_H = 130; // px; every group scales to this height
+const SPRITE_BASE = 'assets/sprites/';
+
+// State → animation mapping from the integration plan. fps/loop always come
+// from the manifest (note: think is fps 8, not 12).
+const ANIM_BY_STATE = {
+  idle: 'idle',
+  talk: 'idle', // the bubble carries the expression
+  happy: 'happy',
+  angry: 'angry',
+  sleep: 'sleep', // sprite replaces the old grayscale filter
+  shy: 'interact',
+  curious: 'surprised',
+};
+// TODO(walk): wander easter egg — needs window movement, which main.js owns.
+// TODO(follow): follow-the-cursor mode — likewise main.js window movement.
+const USED_ANIMS = ['idle', 'blink', 'happy', 'surprised', 'angry', 'sleep', 'interact', 'drag', 'think', 'work', 'eat'];
+
+let spriteManifest = null;
+let spritesReady = false;
+let currentAnim = null;
+let cpuBusyFlag = false;
+let eatPlaying = false;
+
+const animator = SpriteAnimator.create({
+  now: () => performance.now(),
+  onFrame: (i) => {
+    const meta = spriteManifest && spriteManifest.animations[currentAnim];
+    if (meta && meta.frames[i]) petImg.src = SPRITE_BASE + meta.frames[i];
+  },
+});
+window.setInterval(() => { if (spritesReady) animator.tick(); }, 33);
+
+// Scale by group height (~130px target) and offset by the manifest anchor so
+// the feet stay planted even though groups differ in width/height (think is
+// a much larger sheet with a different aspect and scale factor).
+function applySpriteSize(meta) {
+  const scale = SPRITE_TARGET_H / meta.height;
+  const w = Math.round(meta.width * scale);
+  const h = Math.round(meta.height * scale);
+  petImg.style.width = `${w}px`;
+  petImg.style.height = `${h}px`;
+  petImg.style.transform = `translate(${((0.5 - meta.anchorX) * w).toFixed(1)}px, ${((1 - meta.anchorY) * h).toFixed(1)}px)`;
+}
+
+// Arbitration order: drag > sleep > agent think > cpu work > eat > state.
+function resolveAnim() {
+  if (dragging) return 'drag';
+  if (machine.current === 'sleep') return 'sleep';
+  if (agentBusy()) return 'think';
+  if (cpuBusyFlag) return 'work';
+  if (eatPlaying) return 'eat';
+  return ANIM_BY_STATE[machine.current] || 'idle';
+}
+
+// holdLast: a non-loop clip that must not fall back when it ends (drag holds
+// until end-drag, think until the agent goes idle — the manifest marks both
+// loop:false). Everything else falls back to idle per the plan.
+function playAnim(name, { holdLast = false } = {}) {
+  if (!spritesReady) return;
+  const meta = spriteManifest.animations[name];
+  if (!meta) return;
+  currentAnim = name;
+  applySpriteSize(meta);
+  animator.play({
+    fps: meta.fps,
+    frameCount: meta.frameCount,
+    loop: meta.loop,
+    onFinish: () => {
+      if (holdLast) return;
+      const next = resolveAnim();
+      if (next === name) playAnim('idle');
+      else refreshAnim();
+    },
+  });
+}
+// Guarded: the first sleep-rhythm request can run before later `let`s
+// (dragging) are initialized; nothing renders before sprites load anyway.
+function refreshAnim() { if (!spritesReady) return; playAnim(resolveAnim()); }
+
+function preloadSpriteFrames() {
+  const urls = [];
+  for (const name of USED_ANIMS) {
+    const meta = spriteManifest.animations[name];
+    if (meta) for (const f of meta.frames) urls.push(SPRITE_BASE + f);
+  }
+  return Promise.all(urls.map((url) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve(); // a missing frame never blocks
+    img.src = url;
+  })));
+}
+
+// fetch works on the file:// page (verified with an Electron probe), so the
+// renderer loads the manifest itself; main/preload stay untouched.
+fetch(`${SPRITE_BASE}manifest.json`)
+  .then((r) => r.json())
+  .then(async (manifest) => {
+    spriteManifest = manifest;
+    await preloadSpriteFrames();
+    spritesReady = true;
+    pet.classList.add('sprites-ready');
+    refreshAnim();
+  })
+  .catch(() => { /* no manifest: keep the static image + CSS bob fallback */ });
+
+// Random blink while idling: every 6–14s, then back to idle.
+let nextBlinkAt = Date.now() + 6000 + Math.random() * 8000;
+window.setInterval(() => {
+  if (nextBlinkAt === Infinity && (!spritesReady || currentAnim === 'idle')) {
+    nextBlinkAt = Date.now() + 6000 + Math.random() * 8000;
+    return;
+  }
+  if (!spritesReady || eatPlaying || dragging || agentBusy() || cpuBusyFlag) return;
+  if (machine.current !== 'idle' || Date.now() < nextBlinkAt) return;
+  nextBlinkAt = Infinity; // rearmed once the blink falls back to idle
+  playAnim('blink');
+}, 500);
+
+// Eat easter egg: only after 4h of continuous uptime, at most twice a day.
+const EAT_KEY = 'whale-eat-log';
+const EAT_UPTIME_MS = 4 * 60 * 60 * 1000;
+const EAT_MAX_PER_DAY = 2;
+const EAT_PLAY_MS = 4200;
+function eatCountToday() {
+  try {
+    const log = JSON.parse(window.localStorage.getItem(EAT_KEY) || 'null');
+    if (!log || log.date !== new Date().toDateString()) return 0;
+    return log.count | 0;
+  } catch (err) { return 0; }
+}
+window.setInterval(() => {
+  if (Date.now() - APP_START_TIME < EAT_UPTIME_MS) return;
+  if (eatPlaying || eatCountToday() >= EAT_MAX_PER_DAY) return;
+  if (Math.random() > 0.04) return; // ≈ one attempt per 25 min while eligible
+  if (fullscreenHidden || chatting || agentBusy() || cpuBusyFlag || dragging) return;
+  if (machine.current !== 'idle' || !bubble.hidden) return;
+  eatPlaying = true;
+  window.localStorage.setItem(EAT_KEY, JSON.stringify({ date: new Date().toDateString(), count: eatCountToday() + 1 }));
+  playAnim('eat', { holdLast: true }); // manifest loop:true → timeboxed here
+  window.setTimeout(() => { eatPlaying = false; refreshAnim(); }, EAT_PLAY_MS);
+}, 60000);
 
 function isNight() {
   const h = new Date().getHours();
@@ -347,6 +494,7 @@ pet.addEventListener('pointermove', (event) => {
   dragging = true;
   press = null;
   pet.classList.add('dragging');
+  refreshAnim(); // drag clip until end-drag
   say(dict.drag);
   window.whalePet.beginDrag();
 });
@@ -355,6 +503,7 @@ pet.addEventListener('pointerup', async (event) => {
   if (dragging) {
     dragging = false;
     pet.classList.remove('dragging');
+    refreshAnim();
     await window.whalePet.endDrag();
     return;
   }
@@ -374,6 +523,7 @@ pet.addEventListener('pointercancel', async () => {
   if (dragging) {
     dragging = false;
     pet.classList.remove('dragging');
+    refreshAnim();
     await window.whalePet.endDrag();
   }
   press = null;
@@ -426,11 +576,15 @@ Sensors.on('idle-long', () => {
 Sensors.on('cpu-busy', () => {
   if (fullscreenHidden || machine.current === 'sleep') return;
   pet.classList.add('worried');
+  cpuBusyFlag = true;
+  refreshAnim(); // work clip
   say(pickCtx(dict.cpuBusy));
 });
 
 Sensors.on('cpu-calm', () => {
   pet.classList.remove('worried');
+  cpuBusyFlag = false;
+  refreshAnim();
 });
 
 Sensors.on('fullscreen-changed', (fullscreen) => {
@@ -677,6 +831,11 @@ window.whalePet.onAgentStatus((status) => {
   agentPhase = status.phase;
   // Working pose only while the agent is actually running.
   pet.classList.toggle('working', status.phase === 'running');
+  // The think clip (fps 8) plays for the whole busy window and holds its
+  // last frame; entering/leaving the busy window is what switches clips.
+  const wasBusy = prev === 'connecting' || prev === 'running'
+    || prev === 'waiting-approval' || prev === 'waiting-question';
+  if (wasBusy !== agentBusy()) refreshAnim();
   if (status.phase === 'waiting-approval' || status.phase === 'waiting-question') {
     hideBubbleNow();
     machine.request('curious', { force: true });
@@ -709,5 +868,7 @@ window.__whalePetDebug = {
   get approvalUp() { return approvalUp; },
   get agentPhase() { return agentPhase; },
   get machineState() { return machine.current; },
+  get spritesReady() { return spritesReady; },
+  get currentAnim() { return currentAnim; },
   requestState: (name, force) => machine.request(name, { force: force === true }),
 };

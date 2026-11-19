@@ -72,6 +72,34 @@ const ASSERT_SCRIPT = `(() => {
   return { ok: failures.length === 0, failures };
 })()`;
 
+// Sprite phase: waits for the manifest+frame preload, then checks that a
+// happy switch swaps img.src to happy frames, that sleep uses the sleep
+// frames, and that sleep no longer relies on a grayscale filter.
+const SPRITE_SCRIPT = `(async () => {
+  const failures = [];
+  const dbg = window.__whalePetDebug;
+  const img = document.getElementById('pet-img');
+  for (let i = 0; i < 40 && !(dbg && dbg.spritesReady); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  if (!dbg || !dbg.spritesReady) {
+    failures.push('sprite frames never finished preloading');
+    return { ok: false, failures };
+  }
+  dbg.requestState('happy', true);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const happySrc = img.getAttribute('src');
+  if (!/happy\\/happy_/.test(happySrc)) failures.push('happy did not switch img src to happy frames (got ' + happySrc + ')');
+  dbg.requestState('sleep', true);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const sleepSrc = img.getAttribute('src');
+  if (!/sleep\\/sleep_/.test(sleepSrc)) failures.push('sleep did not switch img src to sleep frames (got ' + sleepSrc + ')');
+  const filter = getComputedStyle(img).filter;
+  if (filter.includes('grayscale')) failures.push('sleep must not rely on a grayscale filter (got ' + filter + ')');
+  dbg.requestState('idle', true);
+  return { ok: failures.length === 0, failures };
+})()`;
+
 app.whenReady().then(() => {
   const win = new BrowserWindow({
     width: 260,
@@ -92,7 +120,11 @@ app.whenReady().then(() => {
       // Give the page scripts one turn so startup errors surface in stderr.
       await new Promise((resolve) => setTimeout(resolve, 300));
       const result = await win.webContents.executeJavaScript(ASSERT_SCRIPT, true);
-      console.log(`WHALE_DOM_SMOKE ${JSON.stringify(result)}`);
+      const spriteResult = await win.webContents.executeJavaScript(SPRITE_SCRIPT, true);
+      const ok = result && result.ok && spriteResult && spriteResult.ok;
+      const failures = [].concat(result ? result.failures : ['panel script failed'],
+        spriteResult ? spriteResult.failures : ['sprite script failed']);
+      console.log(`WHALE_DOM_SMOKE ${JSON.stringify({ ok, failures })}`);
       app.exit(result && result.ok ? 0 : 1);
     } catch (err) {
       fail(`executeJavaScript failed: ${err && err.message}`);
