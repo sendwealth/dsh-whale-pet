@@ -151,7 +151,13 @@ function rebuildTrayMenu() {
       ],
     },
     { label: '和她说话 / Chat', click: () => { if (windowUsable()) win.webContents.send('whale:open-chat'); } },
-    { label: '显示 / Show', click: () => { win?.show(); } },
+    // Show must also clear a stuck fullscreen fade, not only raise the
+    // window: the window is often already visible behind an opacity-0 pet.
+    { label: '显示 / Show', click: () => {
+      win?.show();
+      fullscreenState = true; // force the next push to differ
+      pushFullscreen(false);
+    } },
     { type: 'separator' },
     { label: '退出 / Quit', click: () => { quitRequested = true; app.quit(); } },
   ]));
@@ -232,11 +238,13 @@ function windowUsable() {
 }
 
 // Fullscreen approximation: an exclusive-fullscreen app makes the display's
-// workArea collapse onto the full bounds. Limitation: a desktop environment
-// with an auto-hiding panel (or no panel at all) also reports
-// workArea == bounds, so she may fade on panel-less setups; and a fullscreen
-// window on another display is only detected via that display's workArea.
+// workArea collapse onto the full bounds. Desktops whose panels auto-hide or
+// do not exist report workArea == bounds all the time, so the first sample is
+// a baseline: detection only fires on a false -> true transition, and a
+// baseline that already reads fullscreen disables it for this display.
 // Lock-screen events from powerMonitor are treated as fullscreen too.
+let fullscreenBaseline = null;
+
 function computeFullscreen() {
   const bounds = win.getBounds();
   const display = screen.getDisplayMatching(bounds);
@@ -250,6 +258,15 @@ function pushFullscreen(value) {
   if (windowUsable()) win.webContents.send('whale:fullscreen', value);
 }
 
+function sampleFullscreen() {
+  const current = computeFullscreen();
+  if (fullscreenBaseline === null) fullscreenBaseline = current;
+  // A display that reads fullscreen at baseline never had panels to lose;
+  // treat it as never-fullscreen so the pet cannot fade forever there.
+  if (fullscreenBaseline) { pushFullscreen(false); return; }
+  pushFullscreen(current);
+}
+
 function cursorTick() {
   if (!windowUsable()) { stopSensorPolls(); return; }
   const point = screen.getCursorScreenPoint();
@@ -260,7 +277,7 @@ function cursorTick() {
   // Reuse the cursor poll for a ~1 Hz fullscreen check.
   if (++fullscreenTick >= 5) {
     fullscreenTick = 0;
-    pushFullscreen(computeFullscreen());
+    sampleFullscreen();
   }
 }
 
